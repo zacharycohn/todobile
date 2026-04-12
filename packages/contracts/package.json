@@ -1,0 +1,17 @@
+{
+  "name": "@todobile/contracts",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json --noEmit false",
+    "lint": "eslint src --ext .ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --config ../../vitest.config.mts --passWithNoTests"
+  },
+  "dependencies": {
+    "zod": "^3.24.2"
+  }
+}
