@@ -10,6 +10,6 @@ export default defineConfig({
   test: {
     include: ["src/**/*.test.ts", "src/**/*.test.tsx", "**/*.test.ts", "**/*.test.tsx"],
     environment: "jsdom",
-    setupFiles: ["../../packages/test-utils/src/setup-tests.ts"]
+    setupFiles: [fileURLToPath(new URL("./packages/test-utils/src/setup-tests.ts", import.meta.url))]
   }
 });

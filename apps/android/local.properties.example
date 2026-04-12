@@ -1,0 +1,5 @@
+sdk.dir=/Users/your-user/Library/Android/sdk
+TODOBILE_SUPABASE_URL=
+TODOBILE_SUPABASE_ANON_KEY=
+TODOBILE_API_BASE_URL_DEBUG=http\://10.0.2.2\:3000
+TODOBILE_API_BASE_URL_RELEASE=https\://todobile.vercel.app

@@ -1,4 +1,5 @@
 import {
+  captureSourceSchema,
   createTaskInputSchema,
   listTasksQuerySchema,
   pushTokenInputSchema,
@@ -71,7 +72,14 @@ export async function captureVoice(
   dependencies: RuntimeDependencies,
   auth: Awaited<ReturnType<typeof import("./auth").requireAuth>>,
   file: File,
-  mimeType?: string | null
+  mimeType?: string | null,
+  source?: string | null
 ) {
-  return await runVoiceCapture(dependencies, auth, file, mimeType);
+  return await runVoiceCapture(
+    dependencies,
+    auth,
+    file,
+    mimeType,
+    captureSourceSchema.parse(source ?? "android_widget_voice")
+  );
 }

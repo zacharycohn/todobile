@@ -156,7 +156,13 @@ describe("server services", () => {
   it("creates exactly one task from voice capture", async () => {
     const dependencies = createDependencies();
     const file = new File(["audio"], "voice.webm", { type: "audio/webm" });
-    const result = await captureVoice(dependencies, auth, file, "audio/webm");
+    const result = await captureVoice(
+      dependencies,
+      auth,
+      file,
+      "audio/webm",
+      "android_app_voice"
+    );
 
     expect(result.task.details).toBe("Audio follow up");
     expect(result.debug.provider).toBe("fallback");
@@ -164,5 +170,11 @@ describe("server services", () => {
     expect(dependencies.ai.parseVoice).toHaveBeenCalledWith(file, {
       currentUserName: "Zac"
     }, "audio/webm");
+    expect(dependencies.tasks.createTask).toHaveBeenCalledWith(
+      auth,
+      expect.objectContaining({
+        source: "android_app_voice"
+      })
+    );
   });
 });

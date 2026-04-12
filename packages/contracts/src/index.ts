@@ -6,6 +6,7 @@ export const statusValues = ["active", "completed", "deleted"] as const;
 export const captureSourceValues = [
   "android_widget_text",
   "android_widget_voice",
+  "android_app_voice",
   "android_app_manual",
   "web_manual"
 ] as const;
@@ -112,6 +113,7 @@ export type PushTokenInput = z.infer<typeof pushTokenInputSchema>;
 export type TextCaptureInput = z.infer<typeof textCaptureInputSchema>;
 export type AiTaskExtraction = z.infer<typeof aiTaskExtractionSchema>;
 export type MeResponse = z.infer<typeof meResponseSchema>;
+export type CaptureSource = z.infer<typeof captureSourceSchema>;
 
 export type ApiSuccess<T> = {
   data: T;

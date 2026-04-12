@@ -1,4 +1,5 @@
 import {
+  captureSourceSchema,
   aiTaskExtractionSchema,
   createTaskInputSchema
 } from "@todobile/contracts";
@@ -338,7 +339,8 @@ export async function runVoiceCapture(
   dependencies: RuntimeDependencies,
   auth: Awaited<ReturnType<typeof import("./auth").requireAuth>>,
   file: File,
-  mimeType?: string | null
+  mimeType?: string | null,
+  source = captureSourceSchema.parse("android_widget_voice")
 ) {
   try {
     const extracted = await dependencies.ai.parseVoice(
@@ -350,7 +352,7 @@ export async function runVoiceCapture(
     );
     const taskInput = createTaskInputSchema.parse({
       ...extracted.task,
-      source: "android_widget_voice"
+      source
     });
     const task = await dependencies.tasks.createTask(auth, taskInput);
     await dependencies.notifications.notifyTaskCreated(task, auth);

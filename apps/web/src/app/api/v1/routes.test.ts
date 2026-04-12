@@ -321,6 +321,7 @@ describe("API routes", () => {
     const formData = new FormData();
     formData.append("audio", new File(["audio"], "capture.webm", { type: "audio/webm" }));
     formData.append("mimeType", "audio/webm");
+    formData.append("source", "android_app_voice");
 
     const response = await postVoiceCapture({
       headers: new Headers({
@@ -335,6 +336,7 @@ describe("API routes", () => {
     expect(captureVoiceMock.mock.calls[0]?.[1]).toBe(auth);
     expect(captureVoiceMock.mock.calls[0]?.[2]).toBeInstanceOf(File);
     expect(captureVoiceMock.mock.calls[0]?.[3]).toBe("audio/webm");
+    expect(captureVoiceMock.mock.calls[0]?.[4]).toBe("android_app_voice");
   });
 
   it("rejects voice capture requests without audio", async () => {
@@ -358,6 +360,47 @@ describe("API routes", () => {
         details: {}
       }
     });
+  });
+
+  it("rejects unsupported voice capture mime types", async () => {
+    const formData = new FormData();
+    formData.append("audio", new File(["audio"], "capture.wav", { type: "audio/wav" }));
+    formData.append("mimeType", "audio/wav");
+
+    const response = await postVoiceCapture({
+      headers: new Headers({
+        Authorization: `Bearer ${auth.bearerToken}`
+      }),
+      formData: async () => formData
+    } as Request);
+
+    expect(response.status).toBe(400);
+    expect(captureVoiceMock).not.toHaveBeenCalled();
+    const payload = await response.json();
+    expect(payload.error.code).toBe("validation_failed");
+    expect(payload.error.message).toBe("Unsupported audio type");
+  });
+
+  it("rejects oversized voice capture uploads", async () => {
+    const largeAudio = new File([new Uint8Array(10 * 1024 * 1024 + 1)], "capture.m4a", {
+      type: "audio/mp4"
+    });
+    const formData = new FormData();
+    formData.append("audio", largeAudio);
+    formData.append("mimeType", "audio/mp4");
+
+    const response = await postVoiceCapture({
+      headers: new Headers({
+        Authorization: `Bearer ${auth.bearerToken}`
+      }),
+      formData: async () => formData
+    } as Request);
+
+    expect(response.status).toBe(413);
+    expect(captureVoiceMock).not.toHaveBeenCalled();
+    const payload = await response.json();
+    expect(payload.error.code).toBe("validation_failed");
+    expect(payload.error.message).toBe("Audio file is too large");
   });
 
   it("registers a push token", async () => {
