@@ -68,6 +68,7 @@ private fun ToDobileRecorderScreen() {
     val recorderController = remember { RecorderController(context, audioFile) }
     var uiState by remember { mutableStateOf(RecorderUiState.Ready) }
     var statusText by remember { mutableStateOf("Press and hold to record") }
+    var isPlaying by remember { mutableStateOf(false) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -118,6 +119,7 @@ private fun ToDobileRecorderScreen() {
             onPressEnd = {
                 if (uiState == RecorderUiState.Recording) {
                     recorderController.stopRecording()
+                    isPlaying = false
                     statusText = "Recording saved"
                     uiState = RecorderUiState.Recorded
                 }
@@ -136,7 +138,16 @@ private fun ToDobileRecorderScreen() {
 
         if (uiState == RecorderUiState.Recorded && audioFile.exists()) {
             IconButton(
-                onClick = { recorderController.playLatestRecording() },
+                onClick = {
+                    recorderController.playLatestRecording(
+                        onPlaybackStart = {
+                            isPlaying = true
+                        },
+                        onPlaybackComplete = {
+                            isPlaying = false
+                        }
+                    )
+                },
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .size(72.dp)
@@ -144,7 +155,7 @@ private fun ToDobileRecorderScreen() {
                 Icon(
                     imageVector = Icons.Filled.PlayArrow,
                     contentDescription = "Play recording",
-                    tint = Color(0xFF1F5A46),
+                    tint = if (isPlaying) Color(0xFFDA5A45) else Color(0xFF1F5A46),
                     modifier = Modifier.fillMaxSize()
                 )
             }
@@ -163,7 +174,7 @@ private fun HoldToRecordButton(
         modifier = modifier
             .size(220.dp)
             .background(
-                color = if (isRecording) Color(0xFFC84D3A) else Color(0xFFDA5A45),
+                color = if (isRecording) Color(0xFF1F8A55) else Color(0xFFDA5A45),
                 shape = CircleShape
             )
             .pointerInput(isRecording) {
@@ -188,7 +199,7 @@ private fun HoldToRecordButton(
     }
 }
 
-private fun androidx.compose.ui.input.pointer.AwaitPointerEventScope.waitForUpOrCancellation(
+private suspend fun androidx.compose.ui.input.pointer.AwaitPointerEventScope.waitForUpOrCancellation(
     pass: PointerEventPass,
 ) {
     while (true) {
@@ -246,7 +257,10 @@ private class RecorderController(
         recorder = null
     }
 
-    fun playLatestRecording() {
+    fun playLatestRecording(
+        onPlaybackStart: () -> Unit,
+        onPlaybackComplete: () -> Unit,
+    ) {
         if (!audioFile.exists()) {
             return
         }
@@ -256,10 +270,12 @@ private class RecorderController(
             setDataSource(audioFile.absolutePath)
             setOnCompletionListener {
                 stopPlayback()
+                onPlaybackComplete()
             }
             prepare()
             start()
         }
+        onPlaybackStart()
     }
 
     fun release() {
@@ -270,6 +286,9 @@ private class RecorderController(
     }
 
     private fun stopPlayback() {
+        runCatching {
+            mediaPlayer?.stop()
+        }
         mediaPlayer?.release()
         mediaPlayer = null
     }
