@@ -10,8 +10,7 @@ const {
   createTaskMock,
   updateTaskMock,
   captureTextMock,
-  captureVoiceMock,
-  registerPushTokenMock
+  captureVoiceMock
 } = vi.hoisted(() => ({
   requireAuthMock: vi.fn(),
   createRuntimeDependenciesMock: vi.fn(),
@@ -20,8 +19,7 @@ const {
   createTaskMock: vi.fn(),
   updateTaskMock: vi.fn(),
   captureTextMock: vi.fn(),
-  captureVoiceMock: vi.fn(),
-  registerPushTokenMock: vi.fn()
+  captureVoiceMock: vi.fn()
 }));
 
 vi.mock("@/lib/server/auth", () => ({
@@ -38,8 +36,7 @@ vi.mock("@/lib/server/services", () => ({
   createTask: createTaskMock,
   updateTask: updateTaskMock,
   captureText: captureTextMock,
-  captureVoice: captureVoiceMock,
-  registerPushToken: registerPushTokenMock
+  captureVoice: captureVoiceMock
 }));
 
 import { GET as getHealth } from "./health/route";
@@ -48,7 +45,6 @@ import { GET as getTasks, POST as postTask } from "./tasks/route";
 import { PATCH as patchTask } from "./tasks/[taskId]/route";
 import { POST as postTextCapture } from "./captures/text/route";
 import { POST as postVoiceCapture } from "./captures/voice/route";
-import { POST as postPushToken } from "./devices/push-token/route";
 
 const auth = {
   userId: "4f8c55d4-6f4c-4db3-a0a7-4f0e8b86c1c4",
@@ -56,7 +52,7 @@ const auth = {
   familyId: "8f7c91f2-6e6c-4e63-81ef-0f5810a03e1e",
   displayName: "Zac",
   assigneeKey: "Zac" as const,
-  bearerToken: "demo-user:4f8c55d4-6f4c-4db3-a0a7-4f0e8b86c1c4"
+  bearerToken: "jwt-token"
 };
 
 function createDependencies(): RuntimeDependencies {
@@ -69,16 +65,9 @@ function createDependencies(): RuntimeDependencies {
       createTask: vi.fn(),
       updateTask: vi.fn()
     },
-    devices: {
-      registerPushToken: vi.fn()
-    },
     ai: {
       parseText: vi.fn(),
       parseVoice: vi.fn()
-    },
-    notifications: {
-      notifyTaskCreated: vi.fn(),
-      notifyCaptureFailed: vi.fn()
     }
   };
 }
@@ -401,35 +390,5 @@ describe("API routes", () => {
     const payload = await response.json();
     expect(payload.error.code).toBe("validation_failed");
     expect(payload.error.message).toBe("Audio file is too large");
-  });
-
-  it("registers a push token", async () => {
-    registerPushTokenMock.mockResolvedValue({ registered: true });
-
-    const response = await postPushToken(
-      new Request("http://localhost:3000/api/v1/devices/push-token", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${auth.bearerToken}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          platform: "android",
-          pushToken: "ExponentPushToken[demo]",
-          deviceId: "device-1"
-        })
-      })
-    );
-
-    expect(response.status).toBe(200);
-    expect(registerPushTokenMock).toHaveBeenCalledWith(dependencies, auth, {
-      platform: "android",
-      pushToken: "ExponentPushToken[demo]",
-      deviceId: "device-1"
-    });
-    await expect(response.json()).resolves.toEqual({
-      data: { registered: true },
-      error: null
-    });
   });
 });

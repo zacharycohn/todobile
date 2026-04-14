@@ -54,31 +54,17 @@ describe("TaskDashboardApp", () => {
     window.localStorage.clear();
   });
 
-  it("renders demo auth entrypoints", async () => {
+  it("renders the production sign-in screen", async () => {
     const TaskDashboardApp = await loadTaskDashboardApp();
 
-    render(<TaskDashboardApp demoAuthEnabledOverride />);
-    expect(screen.getByText("Use Zac demo")).toBeInTheDocument();
+    render(<TaskDashboardApp />);
+    expect(screen.getByLabelText("Email")).toBeInTheDocument();
+    expect(screen.getByLabelText("Password")).toBeInTheDocument();
     expect(screen.getByText(/sticky-note sprawl/i)).toBeInTheDocument();
     expect(screen.queryByText("Task added")).not.toBeInTheDocument();
   });
 
-  it("hides demo auth entrypoints and clears stale demo tokens when demo auth is disabled", async () => {
-    window.localStorage.setItem(
-      "todobile.demoToken",
-      "demo-user:4f8c55d4-6f4c-4db3-a0a7-4f0e8b86c1c4"
-    );
-
-    const TaskDashboardApp = await loadTaskDashboardApp();
-
-    render(<TaskDashboardApp demoAuthEnabledOverride={false} />);
-
-    expect(screen.queryByText("Use Zac demo")).not.toBeInTheDocument();
-    expect(window.localStorage.getItem("todobile.demoToken")).toBeNull();
-    expect(getMeMock).not.toHaveBeenCalled();
-  });
-
-  it("signs in with email and password when demo auth is disabled", async () => {
+  it("signs in with email and password", async () => {
     const TaskDashboardApp = await loadTaskDashboardApp();
     getMeMock.mockResolvedValue({
       user: {
@@ -91,7 +77,7 @@ describe("TaskDashboardApp", () => {
       nextCursor: null
     });
 
-    render(<TaskDashboardApp demoAuthEnabledOverride={false} />);
+    render(<TaskDashboardApp />);
 
     fireEvent.change(screen.getByLabelText("Email"), {
       target: { value: "zaccohn@gmail.com" }
@@ -177,7 +163,7 @@ describe("TaskDashboardApp", () => {
       return vi.fn();
     });
 
-    render(<TaskDashboardApp demoAuthEnabledOverride={false} />);
+    render(<TaskDashboardApp />);
 
     await waitFor(() => {
       expect(subscribeToTaskChangesMock).toHaveBeenCalledWith({

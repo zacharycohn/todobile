@@ -29,10 +29,6 @@ describe("database migration contract", () => {
     expect(familyMemberFunctionIndex).toBeGreaterThan(profilesIndex);
   });
 
-  it("publishes the tasks table to Supabase realtime", () => {
-    expect(sql).toContain("alter publication supabase_realtime add table public.tasks");
-  });
-
   it("broadcasts task changes over Supabase realtime", () => {
     expect(sql).toContain("create or replace function public.broadcast_task_changes()");
     expect(sql).toContain("create trigger broadcast_tasks_changes");

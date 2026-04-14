@@ -3,7 +3,6 @@ import type {
   CreateTaskInput,
   ListTasksQuery,
   MeResponse,
-  PushTokenInput,
   Task,
   UpdateTaskInput
 } from "@todobile/contracts";
@@ -49,24 +48,13 @@ export interface TaskRepository {
   updateTask(auth: AuthContext, taskId: string, input: UpdateTaskInput): Promise<Task | null>;
 }
 
-export interface DeviceRepository {
-  registerPushToken(auth: AuthContext, input: PushTokenInput): Promise<{ registered: true }>;
-}
-
 export interface AiTaskParser {
   parseText(input: string, context: AiParseContext): Promise<AiParseResult>;
   parseVoice(file: File, context: AiParseContext, mimeType?: string | null): Promise<AiParseResult>;
 }
 
-export interface NotificationService {
-  notifyTaskCreated(task: Task, auth: AuthContext): Promise<void>;
-  notifyCaptureFailed(auth: AuthContext, reason: string): Promise<void>;
-}
-
 export type RuntimeDependencies = {
   profiles: ProfileRepository;
   tasks: TaskRepository;
-  devices: DeviceRepository;
   ai: AiTaskParser;
-  notifications: NotificationService;
 };

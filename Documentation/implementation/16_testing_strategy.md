@@ -9,7 +9,7 @@ Define the complete test matrix and concrete tooling for the system.
 
 ## Decisions / assumptions
 - Use Vitest for unit/integration, Playwright for web e2e, SQL/static checks for migrations, and JUnit/Compose testing scaffolds for Android.
-- Mock OpenAI and push notifications in automated tests.
+- Mock OpenAI in automated tests where live API calls are not the subject of the test.
 
 ## Files to create or modify
 - `packages/test-utils/*`

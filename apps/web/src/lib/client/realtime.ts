@@ -6,16 +6,12 @@ type SubscribeToTaskChangesInput = {
   onChange: () => void;
 };
 
-function isDemoToken(token: string) {
-  return token.startsWith("demo-user:") || token.startsWith("test-user:");
-}
-
 export function subscribeToTaskChanges({
   token,
   familyId,
   onChange
 }: SubscribeToTaskChangesInput) {
-  if (!token || !familyId || isDemoToken(token)) {
+  if (!token || !familyId) {
     return () => undefined;
   }
 

@@ -2,7 +2,6 @@ import {
   captureSourceSchema,
   createTaskInputSchema,
   listTasksQuerySchema,
-  pushTokenInputSchema,
   updateTaskInputSchema
 } from "@todobile/contracts";
 
@@ -34,7 +33,6 @@ export async function createTask(
 ) {
   const parsed = createTaskInputSchema.parse(input);
   const task = await dependencies.tasks.createTask(auth, parsed);
-  await dependencies.notifications.notifyTaskCreated(task, auth);
   return { task };
 }
 
@@ -50,14 +48,6 @@ export async function updateTask(
     throw new AppError("not_found", "Task not found", 404);
   }
   return { task };
-}
-
-export async function registerPushToken(
-  dependencies: RuntimeDependencies,
-  auth: Awaited<ReturnType<typeof import("./auth").requireAuth>>,
-  input: unknown
-) {
-  return dependencies.devices.registerPushToken(auth, pushTokenInputSchema.parse(input));
 }
 
 export async function captureText(

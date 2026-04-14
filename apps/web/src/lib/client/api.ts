@@ -3,7 +3,6 @@ import type {
   CreateTaskInput,
   ListTasksQuery,
   MeResponse,
-  PushTokenInput,
   Task,
   UpdateTaskInput
 } from "@todobile/contracts";
@@ -107,15 +106,4 @@ export async function captureVoice(audio: Blob, mimeType: string, token: string)
   }
 
   return payload.data;
-}
-
-export function registerPushToken(input: PushTokenInput, token: string) {
-  return request<{ registered: true }>(
-    "/api/v1/devices/push-token",
-    {
-      method: "POST",
-      body: JSON.stringify(input)
-    },
-    token
-  );
 }

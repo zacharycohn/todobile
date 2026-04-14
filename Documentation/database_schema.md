@@ -262,5 +262,4 @@ with check (user_id = auth.uid());
 ## Notes
 
 - Task status and timestamps must stay consistent with the API contract
-- The devices table closes a schema gap that would otherwise block `/devices/push-token`
 - Search, family filtering, and archived views need the indexes above to stay responsive as data grows

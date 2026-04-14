@@ -1,37 +1,32 @@
 ## Purpose
-Implement device token registration and outbound notification abstraction for task creation/failure alerts.
+Track deferred background-notification work without keeping inactive server endpoints in the production codepath.
 
 ## Inputs / dependencies
 - [Documentation/implementation/08_capture_pipeline.md](/Users/zacharycohn/Documents/ToDobile/Documentation/implementation/08_capture_pipeline.md)
 
 ## Requirements from source docs
-- `POST /devices/push-token`
-- Notify assignee on task creation
-- Notify originating device on capture failure when possible
+- Revisit mobile/background notifications only when there is a concrete product requirement.
+- Keep core task capture and realtime synchronization independent from push delivery.
 
 ## Decisions / assumptions
-- Provide a provider-agnostic notification service with a logging fallback.
-- Token upsert prefers `(user_id, device_id)` when `deviceId` is supplied, otherwise `push_token`.
+- Push integration is intentionally deferred.
+- When it returns, it should use a real provider end to end rather than placeholder abstractions.
 
 ## Files to create or modify
-- device route handler
-- notification service
-- notification tests
+- future Android/background notification integration points
 
 ## Detailed tasks
-- Implement device upsert logic and validation.
-- Send best-effort notifications after manual and capture task creation.
-- Record provider failures in logs without failing the originating request unless explicitly required.
+- Choose a production push provider only when background alerts are in scope.
+- Reintroduce device registration and delivery flows together at that time.
 
 ## Testing tasks
-- route tests for idempotent device registration
-- service tests for notification fan-out behavior
+- add delivery and registration tests only when a real provider is introduced
 
 ## Exit criteria
-- Device registration works and notification calls are observable in tests.
+- Push is either still explicitly deferred or implemented with a real provider and no placeholder code.
 
 ## Risks / failure modes
-- Push provider credentials are unavailable in local development.
+- Reintroducing push too early can recreate dead code and unnecessary operational surface area.
 
 ## Notes for the next step
 Build the web app shell and authentication-aware layout.

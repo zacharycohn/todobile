@@ -129,43 +129,7 @@ Possible errors:
 
 ---
 
-## 3. Register push token
-
-### POST `/devices/push-token`
-
-Registers or updates the current device's push token.
-
-Request:
-
-```json
-{
-  "platform": "android",
-  "pushToken": "string",
-  "deviceId": "optional-stable-device-id",
-  "deviceName": "Pixel 9 Pro",
-  "appVersion": "1.0.0"
-}
-```
-
-Response:
-
-```json
-{
-  "data": {
-    "registered": true
-  },
-  "error": null
-}
-```
-
-Notes:
-- one user may have multiple devices
-- token upsert should be idempotent
-- if `deviceId` is present, the server should prefer upsert semantics keyed by `(user, deviceId)`
-
----
-
-## 4. Text capture
+## 3. Text capture
 
 ### POST `/captures/text`
 
@@ -186,7 +150,7 @@ Server behavior:
 3. expect exactly one structured task object
 4. validate
 5. insert task
-6. send push notification to assignee
+6. return created task
 7. return created task
 
 Success response:
@@ -232,11 +196,11 @@ Failure response:
 
 Notes:
 - on failure, no task is created
-- backend should also trigger the failure push notification when the originating device can receive it
+- backend should return a structured failure that clients can surface directly
 
 ---
 
-## 5. Voice capture
+## 4. Voice capture
 
 ### POST `/captures/voice`
 
@@ -265,7 +229,7 @@ Server behavior:
 4. validate
 5. insert task
 6. delete/discard audio after processing
-7. send push notification
+7. return created task
 8. return created task
 
 Success response is identical to text capture.
@@ -274,7 +238,7 @@ Failure response is identical to text capture.
 
 ---
 
-## 6. List tasks
+## 5. List tasks
 
 ### GET `/tasks`
 

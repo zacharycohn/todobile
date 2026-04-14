@@ -11,7 +11,7 @@ const auth = {
   familyId: "8f7c91f2-6e6c-4e63-81ef-0f5810a03e1e",
   displayName: "Zac",
   assigneeKey: "Zac" as const,
-  bearerToken: "test-user:4f8c55d4-6f4c-4db3-a0a7-4f0e8b86c1c4"
+  bearerToken: "jwt-token"
 };
 
 function createDependencies(): RuntimeDependencies {
@@ -63,9 +63,6 @@ function createDependencies(): RuntimeDependencies {
         deletedAt: input.status === "deleted" ? now : null
       }))
     },
-    devices: {
-      registerPushToken: vi.fn(async () => ({ registered: true as const }))
-    },
     ai: {
       parseText: vi.fn(async (): Promise<AiParseResult> => ({
         task: {
@@ -97,10 +94,6 @@ function createDependencies(): RuntimeDependencies {
           rawResponse: { details: "Audio follow up" }
         }
       }))
-    },
-    notifications: {
-      notifyTaskCreated: vi.fn(async () => undefined),
-      notifyCaptureFailed: vi.fn(async () => undefined)
     }
   };
 }
@@ -119,7 +112,6 @@ describe("server services", () => {
     });
 
     expect(result.task.details).toBe("Book summer camp");
-    expect(dependencies.notifications.notifyTaskCreated).toHaveBeenCalledTimes(1);
   });
 
   it("lists tasks with normalized query params", async () => {

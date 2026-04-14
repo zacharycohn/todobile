@@ -2,7 +2,6 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 
 import { AppError } from "./errors";
 import { config } from "./config";
-import { demoProfileRepository } from "./demo-store";
 import type { AuthContext, ProfileRepository } from "./types";
 
 function getJwksUrl() {
@@ -19,7 +18,7 @@ function getJwksUrl() {
 
 export async function requireAuth(
   request: Request,
-  profiles: ProfileRepository = demoProfileRepository
+  profiles: ProfileRepository
 ): Promise<AuthContext> {
   const header = request.headers.get("authorization");
   if (!header?.startsWith("Bearer ")) {
@@ -27,26 +26,14 @@ export async function requireAuth(
   }
 
   const token = header.slice("Bearer ".length);
-  let userId: string | null = null;
-  let email = "";
-
-  if (token.startsWith("demo-user:")) {
-    if (!config.nextPublicEnableDemoAuth) {
-      throw new AppError("unauthorized", "Demo auth is disabled", 401);
-    }
-    userId = token.replace("demo-user:", "");
-  } else if (token.startsWith("test-user:")) {
-    userId = token.replace("test-user:", "");
-  } else {
-    const jwksUrl = getJwksUrl();
-    if (!jwksUrl) {
-      throw new AppError("unauthorized", "JWT verification is not configured", 401);
-    }
-
-    const { payload } = await jwtVerify(token, createRemoteJWKSet(new URL(jwksUrl)));
-    userId = typeof payload.sub === "string" ? payload.sub : null;
-    email = typeof payload.email === "string" ? payload.email : "";
+  const jwksUrl = getJwksUrl();
+  if (!jwksUrl) {
+    throw new AppError("unauthorized", "JWT verification is not configured", 401);
   }
+
+  const { payload } = await jwtVerify(token, createRemoteJWKSet(new URL(jwksUrl)));
+  const userId = typeof payload.sub === "string" ? payload.sub : null;
+  const email = typeof payload.email === "string" ? payload.email : "";
 
   if (!userId) {
     throw new AppError("unauthorized", "Unable to resolve authenticated user", 401);

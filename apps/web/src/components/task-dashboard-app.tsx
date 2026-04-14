@@ -18,13 +18,7 @@ import {
   signOut,
   subscribeToAuthStateChanges
 } from "@/lib/client/auth";
-import { isDemoAuthEnabled } from "@/lib/client/config";
 import { subscribeToTaskChanges } from "@/lib/client/realtime";
-
-const demoUsers = [
-  { label: "Use Zac demo", token: "demo-user:4f8c55d4-6f4c-4db3-a0a7-4f0e8b86c1c4" },
-  { label: "Use Lauryl demo", token: "demo-user:d9df8b67-c39e-4dcb-9110-662597724ee1" }
-];
 
 type ViewKey = "today" | "backlog" | "upcoming" | "archived";
 
@@ -36,12 +30,7 @@ function prettyStatus(task: Task) {
   return "Open";
 }
 
-export function TaskDashboardApp({
-  demoAuthEnabledOverride
-}: {
-  demoAuthEnabledOverride?: boolean;
-} = {}) {
-  const demoAuthEnabled = demoAuthEnabledOverride ?? isDemoAuthEnabled();
+export function TaskDashboardApp() {
   const [token, setToken] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -83,19 +72,6 @@ export function TaskDashboardApp({
   }, []);
 
   useEffect(() => {
-    if (demoAuthEnabled) {
-      const saved = window.localStorage.getItem("todobile.demoToken");
-      if (saved) {
-        setToken(saved);
-      }
-      return;
-    }
-
-    const savedDemoToken = window.localStorage.getItem("todobile.demoToken");
-    if (savedDemoToken?.startsWith("demo-user:")) {
-      window.localStorage.removeItem("todobile.demoToken");
-    }
-
     void getAccessToken()
       .then((nextToken) => {
         if (nextToken) {
@@ -107,16 +83,7 @@ export function TaskDashboardApp({
     return subscribeToAuthStateChanges((nextToken) => {
       setToken(nextToken ?? "");
     });
-  }, [demoAuthEnabled]);
-
-  useEffect(() => {
-    if (!demoAuthEnabled) {
-      return;
-    }
-
-    if (!token) return;
-    window.localStorage.setItem("todobile.demoToken", token);
-  }, [demoAuthEnabled, token]);
+  }, []);
 
   useEffect(() => {
     if (!toastMessage) {
@@ -315,46 +282,31 @@ export function TaskDashboardApp({
           <p className="eyebrow">ToDobile</p>
           <h1>Shared household task capture without the sticky-note sprawl.</h1>
           <p className="lede">
-            {demoAuthEnabled
-              ? "The repo is wired for Supabase auth and a hosted API, but it also ships a demo mode so we can develop the task views locally before remote credentials are connected."
-              : "Sign in with your household account to enter the production app against the hosted backend."}
+            Sign in with your household account to enter the production app against the hosted backend.
           </p>
-          {demoAuthEnabled ? (
-            <div className="button-row">
-              {demoUsers.map((user) => (
-                <button key={user.token} onClick={() => setToken(user.token)}>
-                  {user.label}
-                </button>
-              ))}
-            </div>
-          ) : null}
-          {demoAuthEnabled ? null : (
-            <>
-              <label className="field">
-                <span>Email</span>
-                <input
-                  aria-label="Email"
-                  type="email"
-                  placeholder="name@example.com"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                />
-              </label>
-              <label className="field">
-                <span>Password</span>
-                <input
-                  aria-label="Password"
-                  type="password"
-                  placeholder="Password"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                />
-              </label>
-              <button onClick={() => void handleSignIn()} disabled={authLoading}>
-                {authLoading ? "Signing in…" : "Sign in"}
-              </button>
-            </>
-          )}
+          <label className="field">
+            <span>Email</span>
+            <input
+              aria-label="Email"
+              type="email"
+              placeholder="name@example.com"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+            />
+          </label>
+          <label className="field">
+            <span>Password</span>
+            <input
+              aria-label="Password"
+              type="password"
+              placeholder="Password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+            />
+          </label>
+          <button onClick={() => void handleSignIn()} disabled={authLoading}>
+            {authLoading ? "Signing in…" : "Sign in"}
+          </button>
           {error ? <p className="error-banner">{error}</p> : null}
         </section>
       </main>
@@ -378,12 +330,6 @@ export function TaskDashboardApp({
           onClick={() => {
             setError(null);
             setMe(null);
-
-            if (demoAuthEnabled) {
-              window.localStorage.removeItem("todobile.demoToken");
-              setToken("");
-              return;
-            }
 
             void signOut()
               .then(() => {

@@ -64,13 +64,9 @@ describe("subscribeToTaskChanges", () => {
     expect(removeChannel).toHaveBeenCalledWith(realtimeChannel);
   });
 
-  it("skips realtime subscriptions for demo tokens", async () => {
+  it("skips realtime subscriptions when token or family id is missing", async () => {
     const { subscribeToTaskChanges } = await import("./realtime");
-    const unsubscribe = subscribeToTaskChanges({
-      token: "demo-user:123",
-      familyId: "family-1",
-      onChange: vi.fn()
-    });
+    const unsubscribe = subscribeToTaskChanges({ token: "", familyId: "", onChange: vi.fn() });
 
     expect(createClientMock).not.toHaveBeenCalled();
     expect(typeof unsubscribe).toBe("function");

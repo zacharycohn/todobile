@@ -9,9 +9,7 @@ type TestConfig = {
   supabaseServiceRoleKey: string | undefined;
   supabaseJwksUrl: string | undefined;
   openAiApiKey: string | undefined;
-  pushProviderApiKey: string | undefined;
   nextPublicApiBaseUrl: string;
-  nextPublicEnableDemoAuth: boolean;
 };
 
 const baseConfig: TestConfig = {
@@ -20,9 +18,7 @@ const baseConfig: TestConfig = {
   supabaseServiceRoleKey: undefined,
   supabaseJwksUrl: undefined,
   openAiApiKey: undefined,
-  pushProviderApiKey: undefined,
-  nextPublicApiBaseUrl: "http://localhost:3000",
-  nextPublicEnableDemoAuth: true
+  nextPublicApiBaseUrl: "http://localhost:3000"
 };
 
 const auth = {
@@ -31,7 +27,7 @@ const auth = {
   familyId: "8f7c91f2-6e6c-4e63-81ef-0f5810a03e1e",
   displayName: "Zac",
   assigneeKey: "Zac" as const,
-  bearerToken: "test-user:4f8c55d4-6f4c-4db3-a0a7-4f0e8b86c1c4"
+  bearerToken: "jwt-token"
 };
 
 async function importTaskCapture(configOverrides: Partial<TestConfig> = {}) {
@@ -71,16 +67,9 @@ function createDependencies(): RuntimeDependencies {
       })),
       updateTask: vi.fn()
     },
-    devices: {
-      registerPushToken: vi.fn()
-    },
     ai: {
       parseText: vi.fn(),
       parseVoice: vi.fn()
-    },
-    notifications: {
-      notifyTaskCreated: vi.fn(async () => undefined),
-      notifyCaptureFailed: vi.fn(async () => undefined)
     }
   };
 }
@@ -255,22 +244,5 @@ describe("task capture", () => {
         reason: "openai_transcription_failed"
       }
     } satisfies Partial<AppError>);
-  });
-
-  it("notifies on capture failures before rethrowing", async () => {
-    const { runTextCapture } = await importTaskCapture();
-    const dependencies = createDependencies();
-    const failure = new Error("openai exploded");
-    dependencies.ai.parseText = vi.fn(async () => {
-      throw failure;
-    });
-
-    await expect(runTextCapture(dependencies, auth, "Renew tabs")).rejects.toThrow(
-      "openai exploded"
-    );
-    expect(dependencies.notifications.notifyCaptureFailed).toHaveBeenCalledWith(
-      auth,
-      "openai exploded"
-    );
   });
 });

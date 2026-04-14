@@ -1,13 +1,11 @@
 import { createClient } from "@supabase/supabase-js";
 
-import type { PushTokenInput, CreateTaskInput, ListTasksQuery, Task, UpdateTaskInput } from "@todobile/contracts";
+import type { CreateTaskInput, ListTasksQuery, Task, UpdateTaskInput } from "@todobile/contracts";
 
 import { config, hasSupabaseServiceConfig } from "./config";
 import { AppError } from "./errors";
-import { demoDeviceRepository, demoProfileRepository, demoTaskRepository } from "./demo-store";
-import type { AuthContext, DeviceRepository, Profile, ProfileRepository, RuntimeDependencies, TaskRepository } from "./types";
+import type { AuthContext, Profile, ProfileRepository, RuntimeDependencies, TaskRepository } from "./types";
 import { createAiParser } from "./task-capture";
-import { createNotificationService } from "./notifications";
 
 type SupabaseTaskRow = {
   id: string;
@@ -45,19 +43,9 @@ function mapTask(row: SupabaseTaskRow): Task {
   };
 }
 
-function isDemoAuth(auth: AuthContext) {
-  return (
-    auth.bearerToken.startsWith("demo-user:") || auth.bearerToken.startsWith("test-user:")
-  );
-}
-
-function createSupabaseRepositories(): Pick<RuntimeDependencies, "profiles" | "tasks" | "devices"> {
+function createSupabaseRepositories(): Pick<RuntimeDependencies, "profiles" | "tasks"> {
   if (!hasSupabaseServiceConfig()) {
-    return {
-      profiles: demoProfileRepository,
-      tasks: demoTaskRepository,
-      devices: demoDeviceRepository
-    };
+    throw new AppError("supabase_not_configured", "Supabase service configuration is missing", 500);
   }
 
   const client = createClient(config.nextPublicSupabaseUrl!, config.supabaseServiceRoleKey!, {
@@ -96,10 +84,6 @@ function createSupabaseRepositories(): Pick<RuntimeDependencies, "profiles" | "t
 
   const tasks: TaskRepository = {
     async listTasks(auth: AuthContext, query: ListTasksQuery) {
-      if (isDemoAuth(auth)) {
-        return demoTaskRepository.listTasks(auth, query);
-      }
-
       const { data, error } = await client
         .from("tasks")
         .select("*")
@@ -118,10 +102,6 @@ function createSupabaseRepositories(): Pick<RuntimeDependencies, "profiles" | "t
     },
 
     async createTask(auth: AuthContext, input: Omit<CreateTaskInput, "source">) {
-      if (isDemoAuth(auth)) {
-        return demoTaskRepository.createTask(auth, input);
-      }
-
       const payload = {
         family_id: auth.familyId,
         details: input.details,
@@ -144,10 +124,6 @@ function createSupabaseRepositories(): Pick<RuntimeDependencies, "profiles" | "t
     },
 
     async updateTask(auth: AuthContext, taskId: string, input: UpdateTaskInput) {
-      if (isDemoAuth(auth)) {
-        return demoTaskRepository.updateTask(auth, taskId, input);
-      }
-
       const patch = {
         ...(input.details !== undefined ? { details: input.details } : {}),
         ...(input.category !== undefined ? { category: input.category } : {}),
@@ -185,61 +161,13 @@ function createSupabaseRepositories(): Pick<RuntimeDependencies, "profiles" | "t
       return data ? mapTask(data as SupabaseTaskRow) : null;
     }
   };
-
-  const devices: DeviceRepository = {
-    async registerPushToken(auth: AuthContext, input: PushTokenInput) {
-      const matchField = input.deviceId ? "device_id" : "push_token";
-      const matchValue = input.deviceId ?? input.pushToken;
-      const { data: existing } = await client
-        .from("devices")
-        .select("id")
-        .eq("user_id", auth.userId)
-        .eq(matchField, matchValue)
-        .maybeSingle();
-
-      if (existing?.id) {
-        const { error } = await client
-          .from("devices")
-          .update({
-            platform: input.platform,
-            push_token: input.pushToken,
-            device_id: input.deviceId ?? null,
-            device_name: input.deviceName ?? null,
-            app_version: input.appVersion ?? null,
-            last_seen_at: new Date().toISOString()
-          })
-          .eq("id", existing.id);
-
-        if (error) {
-          throw new AppError("device_registration_failed", "Failed to update push token", 500);
-        }
-      } else {
-        const { error } = await client.from("devices").insert({
-          user_id: auth.userId,
-          platform: input.platform,
-          push_token: input.pushToken,
-          device_id: input.deviceId ?? null,
-          device_name: input.deviceName ?? null,
-          app_version: input.appVersion ?? null
-        });
-
-        if (error) {
-          throw new AppError("device_registration_failed", "Failed to register push token", 500);
-        }
-      }
-
-      return { registered: true as const };
-    }
-  };
-
-  return { profiles, tasks, devices };
+  return { profiles, tasks };
 }
 
 export function createRuntimeDependencies(): RuntimeDependencies {
   const repositories = createSupabaseRepositories();
   return {
     ...repositories,
-    ai: createAiParser(),
-    notifications: createNotificationService()
+    ai: createAiParser()
   };
 }

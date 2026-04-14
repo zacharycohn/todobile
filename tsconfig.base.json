@@ -13,7 +13,7 @@
     "baseUrl": ".",
     "paths": {
       "@todobile/contracts": ["packages/contracts/src/index.ts"],
-      "@todobile/test-utils": ["packages/test-utils/src/index.ts"]
+      "@todobile/test-utils": ["packages/test-utils/src/setup-tests.ts"]
     }
   }
 }

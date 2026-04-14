@@ -312,27 +312,18 @@ export async function runTextCapture(
   auth: Awaited<ReturnType<typeof import("./auth").requireAuth>>,
   input: string
 ) {
-  try {
-    const extracted = await dependencies.ai.parseText(input, {
-      currentUserName: auth.assigneeKey
-    });
-    const taskInput = createTaskInputSchema.parse({
-      ...extracted.task,
-      source: "android_widget_text"
-    });
-    const task = await dependencies.tasks.createTask(auth, taskInput);
-    await dependencies.notifications.notifyTaskCreated(task, auth);
-    return {
-      task,
-      debug: extracted.debug
-    };
-  } catch (error) {
-    await dependencies.notifications.notifyCaptureFailed(
-      auth,
-      error instanceof Error ? error.message : "unknown_error"
-    );
-    throw error;
-  }
+  const extracted = await dependencies.ai.parseText(input, {
+    currentUserName: auth.assigneeKey
+  });
+  const taskInput = createTaskInputSchema.parse({
+    ...extracted.task,
+    source: "android_widget_text"
+  });
+  const task = await dependencies.tasks.createTask(auth, taskInput);
+  return {
+    task,
+    debug: extracted.debug
+  };
 }
 
 export async function runVoiceCapture(
@@ -342,29 +333,20 @@ export async function runVoiceCapture(
   mimeType?: string | null,
   source = captureSourceSchema.parse("android_widget_voice")
 ) {
-  try {
-    const extracted = await dependencies.ai.parseVoice(
-      file,
-      {
-        currentUserName: auth.assigneeKey
-      },
-      mimeType
-    );
-    const taskInput = createTaskInputSchema.parse({
-      ...extracted.task,
-      source
-    });
-    const task = await dependencies.tasks.createTask(auth, taskInput);
-    await dependencies.notifications.notifyTaskCreated(task, auth);
-    return {
-      task,
-      debug: extracted.debug
-    };
-  } catch (error) {
-    await dependencies.notifications.notifyCaptureFailed(
-      auth,
-      error instanceof Error ? error.message : "unknown_error"
-    );
-    throw error;
-  }
+  const extracted = await dependencies.ai.parseVoice(
+    file,
+    {
+      currentUserName: auth.assigneeKey
+    },
+    mimeType
+  );
+  const taskInput = createTaskInputSchema.parse({
+    ...extracted.task,
+    source
+  });
+  const task = await dependencies.tasks.createTask(auth, taskInput);
+  return {
+    task,
+    debug: extracted.debug
+  };
 }
