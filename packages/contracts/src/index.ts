@@ -18,6 +18,15 @@ export const captureSourceSchema = z.enum(captureSourceValues);
 export const isoDateSchema = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD date");
+const queryBooleanSchema = z.preprocess((value) => {
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (["true", "1", "yes", "on"].includes(normalized)) return true;
+    if (["false", "0", "no", "off"].includes(normalized)) return false;
+  }
+
+  return value;
+}, z.boolean());
 
 export const taskSchema = z.object({
   id: z.string().uuid(),
@@ -57,13 +66,13 @@ export const updateTaskInputSchema = z.object({
 });
 
 export const listTasksQuerySchema = z.object({
-  view: z.enum(["today", "backlog", "upcoming", "archived"]).default("today"),
-  includePartner: z.coerce.boolean().default(false),
+  view: z.enum(["backlog", "archived"]).default("backlog"),
+  includePartner: queryBooleanSchema.default(false),
   archivedType: z.enum(["completed", "deleted", "all"]).optional(),
   category: categorySchema.optional(),
   assignee: z.string().optional(),
-  hasDeadline: z.coerce.boolean().optional(),
-  hasScheduledDate: z.coerce.boolean().optional(),
+  hasDeadline: queryBooleanSchema.optional(),
+  hasScheduledDate: queryBooleanSchema.optional(),
   status: statusSchema.optional(),
   sort: z.enum(["deadlineDate", "scheduledDate", "updatedAt", "createdAt"]).optional(),
   order: z.enum(["asc", "desc"]).default("asc"),

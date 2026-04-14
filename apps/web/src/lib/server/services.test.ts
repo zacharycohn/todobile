@@ -3,6 +3,7 @@ import type { Task } from "@todobile/contracts";
 import type { AiParseResult } from "./types";
 
 import { captureText, captureVoice, createTask, listTasks, updateTask } from "./services";
+import { AppError } from "./errors";
 import type { RuntimeDependencies } from "./types";
 
 const auth = {
@@ -119,9 +120,62 @@ describe("server services", () => {
     await listTasks(
       dependencies,
       auth,
-      new URLSearchParams({ view: "today", includePartner: "true", limit: "10" })
+      new URLSearchParams({
+        view: "backlog",
+        includePartner: "true",
+        hasDeadline: "true",
+        hasScheduledDate: "false",
+        status: "active",
+        sort: "deadlineDate",
+        order: "desc",
+        search: "summer camp",
+        limit: "10"
+      })
     );
     expect(dependencies.tasks.listTasks).toHaveBeenCalledTimes(1);
+    expect(dependencies.tasks.listTasks).toHaveBeenCalledWith(
+      auth,
+      expect.objectContaining({
+        view: "backlog",
+        includePartner: true,
+        hasDeadline: true,
+        hasScheduledDate: false,
+        status: "active",
+        sort: "deadlineDate",
+        order: "desc",
+        search: "summer camp",
+        limit: 10
+      })
+    );
+  });
+
+  it("accepts archived view variants", async () => {
+    const dependencies = createDependencies();
+    await listTasks(
+      dependencies,
+      auth,
+      new URLSearchParams({ view: "archived", archivedType: "completed", limit: "5" })
+    );
+
+    expect(dependencies.tasks.listTasks).toHaveBeenCalledWith(
+      auth,
+      expect.objectContaining({
+        view: "archived",
+        archivedType: "completed",
+        limit: 5
+      })
+    );
+  });
+
+  it("rejects invalid task list views with a validation error", async () => {
+    const dependencies = createDependencies();
+
+    await expect(
+      listTasks(dependencies, auth, new URLSearchParams({ view: "today" }))
+    ).rejects.toMatchObject({
+      code: "validation_failed",
+      status: 400
+    } satisfies Partial<AppError>);
   });
 
   it("updates task status", async () => {

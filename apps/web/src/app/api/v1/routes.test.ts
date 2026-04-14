@@ -168,6 +168,48 @@ describe("API routes", () => {
     });
   });
 
+  it("lists archived tasks with archived type filters", async () => {
+    listTasksMock.mockResolvedValue({
+      items: [{ id: "task-2", details: "Renew tabs", status: "completed" }],
+      nextCursor: null
+    });
+
+    const response = await getTasks(
+      new Request(
+        "http://localhost:3000/api/v1/tasks?view=archived&archivedType=completed&hasDeadline=true",
+        {
+          headers: { Authorization: `Bearer ${auth.bearerToken}` }
+        }
+      )
+    );
+
+    expect(response.status).toBe(200);
+    expect(listTasksMock).toHaveBeenCalledTimes(1);
+    expect(String(listTasksMock.mock.calls[0]?.[2])).toContain("view=archived");
+    expect(String(listTasksMock.mock.calls[0]?.[2])).toContain("archivedType=completed");
+    expect(String(listTasksMock.mock.calls[0]?.[2])).toContain("hasDeadline=true");
+  });
+
+  it("rejects invalid task list views", async () => {
+    listTasksMock.mockRejectedValue(
+      new AppError("validation_failed", "Request validation failed", 400)
+    );
+
+    const response = await getTasks(
+      new Request("http://localhost:3000/api/v1/tasks?view=today", {
+        headers: { Authorization: `Bearer ${auth.bearerToken}` }
+      })
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      data: null,
+      error: {
+        code: "validation_failed"
+      }
+    });
+  });
+
   it("creates a task from valid JSON", async () => {
     createTaskMock.mockResolvedValue({
       task: {

@@ -22,7 +22,14 @@ export async function listTasks(
   auth: Awaited<ReturnType<typeof import("./auth").requireAuth>>,
   rawQuery: URLSearchParams
 ) {
-  const query = listTasksQuerySchema.parse(Object.fromEntries(rawQuery.entries()));
+  const queryResult = listTasksQuerySchema.safeParse(Object.fromEntries(rawQuery.entries()));
+  if (!queryResult.success) {
+    throw new AppError("validation_failed", "Request validation failed", 400, {
+      issues: queryResult.error.flatten()
+    });
+  }
+
+  const query = queryResult.data;
   return dependencies.tasks.listTasks(auth, query);
 }
 

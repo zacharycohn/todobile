@@ -245,7 +245,7 @@ Failure response is identical to text capture.
 Primary listing endpoint. Clients use query params rather than separate endpoints for each view.
 
 Query params:
-- `view`: `today | backlog | upcoming | archived`
+- `view`: `backlog | archived`
 - `includePartner`: `true | false` default `false`
 - `archivedType`: `completed | deleted | all` only relevant for `view=archived`
 - `category`: optional enum
@@ -258,6 +258,11 @@ Query params:
 - `limit`: integer
 - `cursor`: opaque pagination cursor, optional
 - `search`: optional free text search over task details
+
+View semantics:
+- `backlog` returns active tasks
+- `archived` returns completed and deleted tasks, optionally narrowed by `archivedType`
+- “today”, “upcoming”, and “late” are frontend-derived slices based on each active task’s `scheduledDate` and `deadlineDate`
 
 Examples:
 

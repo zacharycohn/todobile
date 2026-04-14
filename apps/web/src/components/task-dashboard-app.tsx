@@ -20,7 +20,7 @@ import {
 } from "@/lib/client/auth";
 import { subscribeToTaskChanges } from "@/lib/client/realtime";
 
-type ViewKey = "today" | "backlog" | "upcoming" | "archived";
+type ViewKey = "backlog" | "archived";
 
 function prettyStatus(task: Task) {
   if (task.status === "completed") return "Completed";
@@ -35,7 +35,7 @@ export function TaskDashboardApp() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
-  const [view, setView] = useState<ViewKey>("today");
+  const [view, setView] = useState<ViewKey>("backlog");
   const [includePartner, setIncludePartner] = useState(false);
   const [search, setSearch] = useState("");
   const [me, setMe] = useState<{ user: { displayName: string; familyId?: string } } | null>(null);
@@ -346,7 +346,7 @@ export function TaskDashboardApp() {
 
       <section className="toolbar">
         <div className="button-row">
-          {(["today", "backlog", "upcoming", "archived"] as const).map((item) => (
+          {(["backlog", "archived"] as const).map((item) => (
             <button
               key={item}
               className={view === item ? "active" : "ghost"}

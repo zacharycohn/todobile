@@ -97,7 +97,7 @@ describe("TaskDashboardApp", () => {
     await waitFor(() => {
       expect(getMeMock).toHaveBeenCalledWith("real-access-token");
       expect(getTasksMock).toHaveBeenCalledWith(
-        { view: "today", includePartner: false, search: undefined },
+        { view: "backlog", includePartner: false, search: undefined },
         "real-access-token"
       );
     });

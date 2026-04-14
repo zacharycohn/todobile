@@ -43,6 +43,20 @@ function mapTask(row: SupabaseTaskRow): Task {
   };
 }
 
+function mapSortColumn(sort: ListTasksQuery["sort"]): keyof SupabaseTaskRow {
+  switch (sort) {
+    case "deadlineDate":
+      return "deadline_date";
+    case "scheduledDate":
+      return "scheduled_date";
+    case "createdAt":
+      return "created_at";
+    case "updatedAt":
+    default:
+      return "updated_at";
+  }
+}
+
 function createSupabaseRepositories(): Pick<RuntimeDependencies, "profiles" | "tasks"> {
   if (!hasSupabaseServiceConfig()) {
     throw new AppError("supabase_not_configured", "Supabase service configuration is missing", 500);
@@ -84,12 +98,58 @@ function createSupabaseRepositories(): Pick<RuntimeDependencies, "profiles" | "t
 
   const tasks: TaskRepository = {
     async listTasks(auth: AuthContext, query: ListTasksQuery) {
-      const { data, error } = await client
-        .from("tasks")
-        .select("*")
-        .eq("family_id", auth.familyId)
-        .limit(Math.min(query.limit + 1, 101))
-        .order("updated_at", { ascending: query.order === "asc" });
+      let request = client.from("tasks").select("*").eq("family_id", auth.familyId);
+
+      if (query.view === "backlog") {
+        request = request.eq("status", "active");
+      } else if (query.archivedType === "completed") {
+        request = request.eq("status", "completed");
+      } else if (query.archivedType === "deleted") {
+        request = request.eq("status", "deleted");
+      } else {
+        request = request.in("status", ["completed", "deleted"]);
+      }
+
+      if (query.status) {
+        request = request.eq("status", query.status);
+      }
+
+      if (query.category) {
+        request = request.eq("category", query.category);
+      }
+
+      if (query.assignee) {
+        const assignees = query.assignee
+          .split(",")
+          .map((value) => value.trim())
+          .filter(Boolean);
+
+        if (assignees.length === 1) {
+          request = request.eq("assignee", assignees[0]);
+        } else if (assignees.length > 1) {
+          request = request.in("assignee", assignees);
+        }
+      }
+
+      if (query.hasDeadline === true) {
+        request = request.not("deadline_date", "is", null);
+      } else if (query.hasDeadline === false) {
+        request = request.is("deadline_date", null);
+      }
+
+      if (query.hasScheduledDate === true) {
+        request = request.not("scheduled_date", "is", null);
+      } else if (query.hasScheduledDate === false) {
+        request = request.is("scheduled_date", null);
+      }
+
+      if (query.search) {
+        request = request.ilike("details", `%${query.search}%`);
+      }
+
+      const { data, error } = await request
+        .order(mapSortColumn(query.sort), { ascending: query.order === "asc" })
+        .limit(Math.min(query.limit + 1, 101));
 
       if (error) {
         throw new AppError("task_list_failed", "Failed to load tasks", 500);
