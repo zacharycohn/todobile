@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
-import type { CreateTaskInput, Task } from "@todobile/contracts";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import type { CreateTaskInput, Task, UpdateTaskInput } from "@todobile/contracts";
 
 import {
   captureVoice,
@@ -49,6 +49,12 @@ function prettyRowMeta(task: Task, today: string) {
     bits.push("Completed");
   } else if (task.status === "deleted") {
     bits.push("Deleted");
+  } else if (task.scheduledDate && task.scheduledDate >= today) {
+    bits.push(
+      task.scheduledDate === today
+        ? "Scheduled today"
+        : `Scheduled ${formatDateLabel(task.scheduledDate)}`
+    );
   } else if (task.deadlineDate && task.deadlineDate < today) {
     bits.push(`Late • Was due ${formatDateLabel(task.deadlineDate)}`);
   } else if (task.deadlineDate) {
@@ -115,10 +121,12 @@ export function TaskDashboardApp() {
   const [recordingStatus, setRecordingStatus] = useState("Hold to record");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [composerOpen, setComposerOpen] = useState(false);
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [menuTaskId, setMenuTaskId] = useState<string | null>(null);
   const [orderedTaskIds, setOrderedTaskIds] = useState<string[]>([]);
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
   const [dragOverTaskId, setDragOverTaskId] = useState<string | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
   const today = todayIso();
 
   useEffect(() => {
@@ -156,6 +164,22 @@ export function TaskDashboardApp() {
       window.clearTimeout(timeout);
     };
   }, [toastMessage]);
+
+  useEffect(() => {
+    if (!menuTaskId) return;
+
+    function handlePointerDown(event: MouseEvent) {
+      if (menuRef.current?.contains(event.target as Node)) {
+        return;
+      }
+      setMenuTaskId(null);
+    }
+
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+    };
+  }, [menuTaskId]);
 
   async function refresh() {
     const [meResult, backlogResult, archivedResult] = await Promise.all([
@@ -252,12 +276,51 @@ export function TaskDashboardApp() {
     });
   }
 
-  async function handleCreateTask() {
-    setError(null);
-    await createTask(newTask, token);
-    setToastMessage("Task added");
-    setNewTask(taskCreationDefaults());
+  function closeComposer() {
     setComposerOpen(false);
+    setEditingTaskId(null);
+    setNewTask(taskCreationDefaults());
+  }
+
+  function openComposerForCreate() {
+    setEditingTaskId(null);
+    setNewTask(taskCreationDefaults());
+    setComposerOpen(true);
+  }
+
+  function openComposerForEdit(task: Task) {
+    setMenuTaskId(null);
+    setEditingTaskId(task.id);
+    setNewTask({
+      details: task.details,
+      category: task.category,
+      assignee: task.assignee,
+      deadlineDate: task.deadlineDate,
+      scheduledDate: task.scheduledDate,
+      urls: task.urls,
+      source: "web_manual"
+    });
+    setComposerOpen(true);
+  }
+
+  async function handleSubmitTask() {
+    setError(null);
+    if (editingTaskId) {
+      const update: UpdateTaskInput = {
+        details: newTask.details,
+        category: newTask.category,
+        assignee: newTask.assignee,
+        deadlineDate: newTask.deadlineDate ?? null,
+        scheduledDate: newTask.scheduledDate ?? null,
+        urls: newTask.urls
+      };
+      await updateTask(editingTaskId, update, token);
+      setToastMessage("Task saved");
+    } else {
+      await createTask(newTask, token);
+      setToastMessage("Task added");
+    }
+    closeComposer();
     await refresh();
   }
 
@@ -462,7 +525,7 @@ export function TaskDashboardApp() {
               <button
                 type="button"
                 className="zeta-button zeta-button-primary zeta-small-button"
-                onClick={() => setComposerOpen(true)}
+                onClick={openComposerForCreate}
               >
               Add
             </button>
@@ -563,7 +626,7 @@ export function TaskDashboardApp() {
                     </a>
                   ) : null}
                 </div>
-                <div className="zeta-row-actions">
+                <div className="zeta-row-actions" ref={menuTaskId === task.id ? menuRef : null}>
                   <button
                     type="button"
                     className="zeta-icon-button"
@@ -574,15 +637,14 @@ export function TaskDashboardApp() {
                   </button>
                   {menuTaskId === task.id ? (
                     <div className="zeta-menu">
-                      {task.status !== "completed" ? (
-                        <button type="button" onClick={() => void handleStatus(task.id, "completed")}>
-                          Complete
-                        </button>
-                      ) : (
+                      <button type="button" onClick={() => openComposerForEdit(task)}>
+                        Edit
+                      </button>
+                      {task.status === "completed" ? (
                         <button type="button" onClick={() => void handleStatus(task.id, "active")}>
                           Reopen
                         </button>
-                      )}
+                      ) : null}
                       <button type="button" onClick={() => void handleStatus(task.id, "deleted")}>
                         Delete
                       </button>
@@ -613,23 +675,23 @@ export function TaskDashboardApp() {
       </section>
 
       {composerOpen ? (
-        <div className="zeta-overlay" role="presentation" onClick={() => setComposerOpen(false)}>
+        <div className="zeta-overlay" role="presentation" onClick={closeComposer}>
           <section
             className="zeta-composer"
             role="dialog"
             aria-modal="true"
-            aria-label="New task"
+            aria-label={editingTaskId ? "Edit task" : "New task"}
             onClick={(event) => event.stopPropagation()}
           >
             <header className="zeta-top">
               <div>
-                <p className="zeta-eyebrow">New task</p>
-                <h2>Capture</h2>
+                <p className="zeta-eyebrow">{editingTaskId ? "Edit task" : "New task"}</p>
+                <h2>{editingTaskId ? "Update" : "Capture"}</h2>
               </div>
               <button
                 type="button"
                 className="zeta-button zeta-button-ghost zeta-small-button"
-                onClick={() => setComposerOpen(false)}
+                onClick={closeComposer}
               >
                 Close
               </button>
@@ -760,9 +822,9 @@ export function TaskDashboardApp() {
               type="button"
               className="zeta-button zeta-button-primary zeta-full-width"
               disabled={!newTask.details.trim()}
-              onClick={() => void handleCreateTask()}
+              onClick={() => void handleSubmitTask()}
             >
-              Add task
+              {editingTaskId ? "Save" : "Add task"}
             </button>
 
             {captureDebug ? (

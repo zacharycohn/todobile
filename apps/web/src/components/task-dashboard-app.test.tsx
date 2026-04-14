@@ -139,7 +139,7 @@ describe("TaskDashboardApp", () => {
 
     await waitFor(() => {
       expect(getTasksMock).toHaveBeenCalledWith(
-        { view: "backlog", includePartner: false, search: undefined },
+        { view: "backlog", includePartner: false },
         "real-access-token"
       );
     });
@@ -291,6 +291,66 @@ describe("TaskDashboardApp", () => {
     expect(screen.queryByText("Due today")).not.toBeInTheDocument();
   });
 
+  it("shows the scheduled date instead of the due date when both exist and the scheduled date is current or future", async () => {
+    getAccessTokenMock.mockResolvedValue("real-jwt-token");
+    const TaskDashboardApp = await loadTaskDashboardApp();
+
+    getMeMock.mockResolvedValue({
+      user: {
+        displayName: "Zac",
+        familyId: "family-1",
+        assigneeKey: "Zac"
+      }
+    });
+    getTasksMock.mockResolvedValue({
+      items: [
+        buildTask({
+          details: "Pick up medicine",
+          assignee: "Zac",
+          scheduledDate: "2026-04-15",
+          deadlineDate: "2026-04-20"
+        })
+      ],
+      nextCursor: null
+    });
+
+    render(<TaskDashboardApp />);
+
+    await screen.findByText("Pick up medicine");
+    expect(screen.getByText("Zac • Scheduled Apr 15")).toBeInTheDocument();
+    expect(screen.queryByText(/Due Apr 20/i)).not.toBeInTheDocument();
+  });
+
+  it("falls back to the due date when the scheduled date is already past on an active task", async () => {
+    getAccessTokenMock.mockResolvedValue("real-jwt-token");
+    const TaskDashboardApp = await loadTaskDashboardApp();
+
+    getMeMock.mockResolvedValue({
+      user: {
+        displayName: "Zac",
+        familyId: "family-1",
+        assigneeKey: "Zac"
+      }
+    });
+    getTasksMock.mockResolvedValue({
+      items: [
+        buildTask({
+          details: "Pay invoice",
+          assignee: "Zac",
+          scheduledDate: "2026-04-13",
+          deadlineDate: "2026-04-20"
+        })
+      ],
+      nextCursor: null
+    });
+
+    render(<TaskDashboardApp />);
+
+    await screen.findByText("Pay invoice");
+    expect(screen.getByText("Zac • Due Apr 20")).toBeInTheDocument();
+    expect(screen.queryByText(/Scheduled Apr 13/i)).not.toBeInTheDocument();
+  });
+
   it("uses the archived endpoint for Closed and shows archived tasks", async () => {
     getAccessTokenMock.mockResolvedValue("real-jwt-token");
     const TaskDashboardApp = await loadTaskDashboardApp();
@@ -327,7 +387,7 @@ describe("TaskDashboardApp", () => {
 
     await waitFor(() => {
       expect(getTasksMock).toHaveBeenLastCalledWith(
-        { view: "archived", includePartner: false, search: undefined },
+        { view: "archived", includePartner: false },
         "real-jwt-token"
       );
     });
@@ -379,6 +439,70 @@ describe("TaskDashboardApp", () => {
     });
 
     expect(await screen.findByRole("status")).toHaveTextContent("Task added");
+  });
+
+  it("opens edit mode from the task menu, prefills the composer, and saves updates", async () => {
+    getAccessTokenMock.mockResolvedValue("real-jwt-token");
+    const TaskDashboardApp = await loadTaskDashboardApp();
+
+    getMeMock.mockResolvedValue({
+      user: {
+        displayName: "Zac",
+        familyId: "family-1",
+        assigneeKey: "Zac"
+      }
+    });
+    getTasksMock.mockResolvedValue({
+      items: [
+        buildTask({
+          details: "Pick up medicine",
+          assignee: "Zac",
+          category: "do",
+          scheduledDate: "2026-04-15",
+          deadlineDate: "2026-04-16"
+        })
+      ],
+      nextCursor: null
+    });
+    updateTaskMock.mockResolvedValue({
+      task: buildTask({
+        details: "Pick up Zac's medicine",
+        assignee: "Zac",
+        category: "do",
+        scheduledDate: "2026-04-15",
+        deadlineDate: "2026-04-16"
+      })
+    });
+
+    render(<TaskDashboardApp />);
+
+    const actionButton = await screen.findByRole("button", { name: "Task options" });
+    fireEvent.click(actionButton);
+    fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
+
+    const dialog = screen.getByRole("dialog", { name: "Edit task" });
+    expect(within(dialog).getByLabelText("Details")).toHaveValue("Pick up medicine");
+    expect(within(dialog).getByLabelText("Scheduled")).toHaveValue("2026-04-15");
+    expect(within(dialog).getByLabelText("Deadline")).toHaveValue("2026-04-16");
+
+    fireEvent.change(within(dialog).getByLabelText("Details"), {
+      target: { value: "Pick up Zac's medicine" }
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(updateTaskMock).toHaveBeenCalledWith(
+        "11111111-1111-4111-8111-111111111111",
+        expect.objectContaining({
+          details: "Pick up Zac's medicine",
+          category: "do",
+          assignee: "Zac",
+          scheduledDate: "2026-04-15",
+          deadlineDate: "2026-04-16"
+        }),
+        "real-jwt-token"
+      );
+    });
   });
 
   it("captures text from the overlay and keeps OpenAI debug available", async () => {
@@ -473,7 +597,7 @@ describe("TaskDashboardApp", () => {
     });
   });
 
-  it("opens overflow actions for secondary task controls", async () => {
+  it("opens overflow actions for secondary task controls and closes on outside click", async () => {
     getAccessTokenMock.mockResolvedValue("real-jwt-token");
     const TaskDashboardApp = await loadTaskDashboardApp();
 
@@ -493,7 +617,11 @@ describe("TaskDashboardApp", () => {
     const actionButton = await screen.findByRole("button", { name: "Task options" });
     fireEvent.click(actionButton);
 
-    expect(await screen.findByRole("button", { name: "Delete" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Edit" })).toBeInTheDocument();
+    fireEvent.mouseDown(document.body);
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: "Delete" })).not.toBeInTheDocument();
+    });
   });
 
   it("refreshes tasks when a realtime change arrives", async () => {
