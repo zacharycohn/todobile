@@ -77,7 +77,7 @@ function buildTaskExtractionPrompt(currentUserName: "Zac" | "Lauryl") {
     "Use this assignee precedence order: explicit named person first, then clear first-person references from the authenticated user, otherwise Someone.",
     `If the user uses first-person references like 'I', 'I'll', 'I'd', 'me', 'my', 'mine', 'we', 'we'll', or 'our' and does not explicitly assign the task to someone else, assignee should be ${currentUserName}.`,
     `assignee should be Zac if the text explicitly mentions Zac or Zac's, Lauryl if the text explicitly mentions Lauryl or Lauryl's, ${currentUserName} for unambiguous first-person references from the authenticated user, otherwise Someone.`,
-    "category should be buy for shopping or purchasing, do for errands/actions/appointments/transport/pickups/dropoffs, remember for reminders, blocker for blocked or waiting tasks.",
+    "category should be buy for shopping or purchasing, do for errands/actions/appointments/transport/pickups/dropoffs/reminders, blocker for blocked or waiting tasks.",
     `scheduledDate is the date to do the task on; resolve relative dates using today=${todayIso}. For example, 'next Tuesday' should become ${nextTuesdayIso}, and 'on the 20th' should become ${twentiethIso}.`,
     "deadlineDate is only for due/by/before/no-later-than phrasing, not simply when the task should happen.",
     "If no date is implied, return null dates.",
@@ -96,7 +96,6 @@ function inferAssignee(input: string) {
 function inferCategory(input: string) {
   const normalized = input.toLowerCase();
   if (normalized.includes("buy") || normalized.includes("purchase")) return "buy";
-  if (normalized.includes("remember")) return "remember";
   if (normalized.includes("blocked") || normalized.includes("waiting")) return "blocker";
   return "do";
 }
@@ -166,7 +165,7 @@ function createOpenAiParser(): AiTaskParser {
           ],
           properties: {
             details: { type: "string" },
-            category: { type: "string", enum: ["buy", "do", "remember", "blocker"] },
+            category: { type: "string", enum: ["buy", "do", "blocker"] },
             assignee: { type: "string", enum: ["Zac", "Lauryl", "Someone"] },
             deadlineDate: { type: ["string", "null"] },
             scheduledDate: { type: ["string", "null"] },

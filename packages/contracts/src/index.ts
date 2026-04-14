@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const categoryValues = ["buy", "do", "remember", "blocker"] as const;
+export const categoryValues = ["buy", "do", "blocker"] as const;
 export const assigneeValues = ["Zac", "Lauryl", "Someone"] as const;
 export const statusValues = ["active", "completed", "deleted"] as const;
 export const captureSourceValues = [

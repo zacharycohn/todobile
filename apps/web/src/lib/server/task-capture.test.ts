@@ -89,6 +89,18 @@ describe("task capture", () => {
     const body = JSON.parse(String(request?.body));
     expect(body.input[0].content).toContain("The authenticated user for this request is Zac.");
     expect(body.input[0].content).toContain("first-person references");
+    expect(body.input[0].content).not.toContain("remember for reminders");
+  });
+
+  it("maps reminder phrasing into the do category in the fallback parser", async () => {
+    const { createAiParser } = await importTaskCapture();
+    const parser = createAiParser();
+
+    const result = await parser.parseText("remember dentist appointment tomorrow", {
+      currentUserName: "Zac"
+    });
+
+    expect(result.task.category).toBe("do");
   });
 
   it("parses nested output_text content when output_text is omitted", async () => {

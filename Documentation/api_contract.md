@@ -48,7 +48,7 @@ Date format:
 - timestamps are ISO 8601 UTC
 
 Enums:
-- `category`: `buy | do | remember | blocker`
+- `category`: `buy | do | blocker`
 - `assignee`: `Zac | Lauryl | Someone`
 - `status`: `active | completed | deleted`
 - `captureSource`: `android_widget_text | android_widget_voice | android_app_manual | web_manual`

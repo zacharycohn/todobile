@@ -80,7 +80,7 @@ const rows: TaskRow[] = [
     id: "33333333-3333-4333-8333-333333333333",
     family_id: auth.familyId,
     details: "Renew tabs online",
-    category: "remember",
+    category: "do",
     assignee: "Zac",
     status: "completed",
     deadline_date: "2026-04-20",

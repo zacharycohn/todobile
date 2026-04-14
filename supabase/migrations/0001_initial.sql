@@ -11,7 +11,7 @@ begin
 end;
 $$;
 
-create type public.task_category as enum ('buy', 'do', 'remember', 'blocker');
+create type public.task_category as enum ('buy', 'do', 'blocker');
 create type public.task_assignee as enum ('Zac', 'Lauryl', 'Someone');
 create type public.task_status as enum ('active', 'completed', 'deleted');
 create type public.device_platform as enum ('android', 'web');

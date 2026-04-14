@@ -20,29 +20,65 @@ import {
 } from "@/lib/client/auth";
 import { subscribeToTaskChanges } from "@/lib/client/realtime";
 
-type ViewKey = "backlog" | "archived";
+import {
+  buildDefaultOwnerSelection,
+  buildTaskSummary,
+  getUrgencyState,
+  getVisibleTasks,
+  reorderTaskIds,
+  type AssigneeValue,
+  type DashboardTab
+} from "./task-dashboard-view";
 
-function prettyStatus(task: Task) {
-  if (task.status === "completed") return "Completed";
-  if (task.status === "deleted") return "Deleted";
-  if (task.deadlineDate) return `Due ${task.deadlineDate}`;
-  if (task.scheduledDate) return `Scheduled ${task.scheduledDate}`;
-  return "Open";
+function todayIso() {
+  return new Date().toISOString().slice(0, 10);
 }
 
-export function TaskDashboardApp() {
-  const [token, setToken] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [authLoading, setAuthLoading] = useState(false);
-  const [view, setView] = useState<ViewKey>("backlog");
-  const [includePartner, setIncludePartner] = useState(false);
-  const [search, setSearch] = useState("");
-  const [me, setMe] = useState<{ user: { displayName: string; familyId?: string } } | null>(null);
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [newTask, setNewTask] = useState<CreateTaskInput>({
+function formatDateLabel(value: string | null) {
+  if (!value) return null;
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric"
+  }).format(new Date(`${value}T00:00:00`));
+}
+
+function prettyRowMeta(task: Task, today: string) {
+  const bits: string[] = [task.assignee];
+
+  if (task.status === "completed") {
+    bits.push("Completed");
+  } else if (task.status === "deleted") {
+    bits.push("Deleted");
+  } else if (task.deadlineDate && task.deadlineDate < today) {
+    bits.push(`Late • Was due ${formatDateLabel(task.deadlineDate)}`);
+  } else if (task.deadlineDate) {
+    bits.push(
+      task.deadlineDate === today
+        ? "Due today"
+        : `Due ${formatDateLabel(task.deadlineDate)}`
+    );
+  } else if (task.scheduledDate) {
+    bits.push(
+      task.scheduledDate === today
+        ? "Scheduled today"
+        : `Scheduled ${formatDateLabel(task.scheduledDate)}`
+    );
+  }
+
+  return bits.join(" • ");
+}
+
+function ownerButtonLabel(assignee: AssigneeValue) {
+  if (assignee === "Someone") return "Unassigned";
+  return `${assignee}'s`;
+}
+
+function categoryLabel(category: Task["category"]) {
+  return category[0].toUpperCase() + category.slice(1);
+}
+
+function taskCreationDefaults(): CreateTaskInput {
+  return {
     details: "",
     category: "do",
     assignee: "Someone",
@@ -50,7 +86,25 @@ export function TaskDashboardApp() {
     scheduledDate: null,
     urls: [],
     source: "web_manual"
-  });
+  };
+}
+
+export function TaskDashboardApp() {
+  const [token, setToken] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [authLoading, setAuthLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<DashboardTab>("open");
+  const [selectedAssignees, setSelectedAssignees] = useState<Set<AssigneeValue>>(new Set());
+  const [search, setSearch] = useState("");
+  const [me, setMe] = useState<{
+    user: { displayName: string; familyId?: string; assigneeKey?: AssigneeValue };
+  } | null>(null);
+  const [backlogTasks, setBacklogTasks] = useState<Task[]>([]);
+  const [archivedTasks, setArchivedTasks] = useState<Task[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [newTask, setNewTask] = useState<CreateTaskInput>(taskCreationDefaults);
   const [captureInput, setCaptureInput] = useState("");
   const [captureDebug, setCaptureDebug] = useState<{
     prompt: string;
@@ -60,6 +114,12 @@ export function TaskDashboardApp() {
   const [recordingSupported, setRecordingSupported] = useState(true);
   const [recordingStatus, setRecordingStatus] = useState("Hold to record");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [composerOpen, setComposerOpen] = useState(false);
+  const [menuTaskId, setMenuTaskId] = useState<string | null>(null);
+  const [orderedTaskIds, setOrderedTaskIds] = useState<string[]>([]);
+  const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
+  const [dragOverTaskId, setDragOverTaskId] = useState<string | null>(null);
+  const today = todayIso();
 
   useEffect(() => {
     setRecordingSupported(
@@ -86,9 +146,7 @@ export function TaskDashboardApp() {
   }, []);
 
   useEffect(() => {
-    if (!toastMessage) {
-      return;
-    }
+    if (!toastMessage) return;
 
     const timeout = window.setTimeout(() => {
       setToastMessage(null);
@@ -99,6 +157,22 @@ export function TaskDashboardApp() {
     };
   }, [toastMessage]);
 
+  async function refresh() {
+    const [meResult, backlogResult, archivedResult] = await Promise.all([
+      getMe(token),
+      getTasks({ view: "backlog", includePartner: false }, token),
+      getTasks({ view: "archived", includePartner: false }, token)
+    ]);
+
+    setMe(meResult);
+    setBacklogTasks(backlogResult.items);
+    setArchivedTasks(archivedResult.items);
+
+    if (meResult.user.assigneeKey && selectedAssignees.size === 0) {
+      setSelectedAssignees(buildDefaultOwnerSelection(meResult.user.assigneeKey));
+    }
+  }
+
   useEffect(() => {
     if (!token) return;
 
@@ -106,18 +180,10 @@ export function TaskDashboardApp() {
     setLoading(true);
     setError(null);
 
-    Promise.all([
-      getMe(token),
-      getTasks({ view, includePartner, search: search || undefined }, token)
-    ])
-      .then(([meResult, taskResult]) => {
-        if (cancelled) return;
-        setMe(meResult);
-        setTasks(taskResult.items);
-      })
+    refresh()
       .catch((nextError) => {
         if (cancelled) return;
-        setError(nextError instanceof Error ? nextError.message : "Failed to load data");
+        setError(nextError instanceof Error ? nextError.message : "Failed to load profile");
       })
       .finally(() => {
         if (!cancelled) {
@@ -128,12 +194,10 @@ export function TaskDashboardApp() {
     return () => {
       cancelled = true;
     };
-  }, [token, view, includePartner, search]);
+  }, [token, search]);
 
   useEffect(() => {
-    if (!token || !me?.user.familyId) {
-      return;
-    }
+    if (!token || !me?.user.familyId) return;
 
     try {
       return subscribeToTaskChanges({
@@ -149,35 +213,51 @@ export function TaskDashboardApp() {
       );
       return;
     }
-  }, [token, me?.user.familyId, view, includePartner, search]);
+  }, [token, me?.user.familyId, search]);
 
-  const grouped = useMemo(() => {
-    return tasks.reduce<Record<string, Task[]>>((accumulator, task) => {
-      const key = task.assignee;
-      accumulator[key] ??= [];
-      accumulator[key].push(task);
-      return accumulator;
-    }, {});
-  }, [tasks]);
+  const summary = useMemo(
+    () => buildTaskSummary([...backlogTasks, ...archivedTasks], today),
+    [archivedTasks, backlogTasks, today]
+  );
 
-  async function refresh() {
-    const result = await getTasks({ view, includePartner, search: search || undefined }, token);
-    setTasks(result.items);
+  const visibleTasks = useMemo(() => {
+    const sourceTasks = activeTab === "closed" ? archivedTasks : backlogTasks;
+    return getVisibleTasks({
+      tasks: sourceTasks,
+      tab: activeTab,
+      selectedAssignees,
+      search,
+      today,
+      orderedTaskIds
+    });
+  }, [activeTab, archivedTasks, backlogTasks, orderedTaskIds, search, selectedAssignees, today]);
+
+  useEffect(() => {
+    const validIds = new Set(
+      [...backlogTasks, ...archivedTasks].map((task) => task.id)
+    );
+
+    setOrderedTaskIds((current) => current.filter((taskId) => validIds.has(taskId)));
+  }, [backlogTasks, archivedTasks]);
+
+  function toggleAssignee(assignee: AssigneeValue) {
+    setSelectedAssignees((current) => {
+      const next = new Set(current);
+      if (next.has(assignee)) {
+        next.delete(assignee);
+      } else {
+        next.add(assignee);
+      }
+      return next;
+    });
   }
 
   async function handleCreateTask() {
     setError(null);
     await createTask(newTask, token);
     setToastMessage("Task added");
-    setNewTask({
-      details: "",
-      category: "do",
-      assignee: "Someone",
-      deadlineDate: null,
-      scheduledDate: null,
-      urls: [],
-      source: "web_manual"
-    });
+    setNewTask(taskCreationDefaults());
+    setComposerOpen(false);
     await refresh();
   }
 
@@ -195,9 +275,7 @@ export function TaskDashboardApp() {
   }
 
   async function handleVoiceCaptureStart() {
-    if (!recordingSupported || recording) {
-      return;
-    }
+    if (!recordingSupported || recording) return;
 
     try {
       setError(null);
@@ -207,9 +285,7 @@ export function TaskDashboardApp() {
       const recorder = new MediaRecorder(stream);
 
       recorder.addEventListener("dataavailable", (event) => {
-        if (event.data.size > 0) {
-          chunks.push(event.data);
-        }
+        if (event.data.size > 0) chunks.push(event.data);
       });
 
       recorder.addEventListener("stop", async () => {
@@ -257,6 +333,7 @@ export function TaskDashboardApp() {
 
   async function handleStatus(taskId: string, status: Task["status"]) {
     setError(null);
+    setMenuTaskId(null);
     await updateTask(taskId, { status }, token);
     await refresh();
   }
@@ -277,294 +354,443 @@ export function TaskDashboardApp() {
 
   if (!token) {
     return (
-      <main className="page-shell">
-        <section className="hero">
-          <p className="eyebrow">ToDobile</p>
-          <h1>Shared household task capture without the sticky-note sprawl.</h1>
-          <p className="lede">
-            Sign in with your household account to enter the production app against the hosted backend.
-          </p>
-          <label className="field">
-            <span>Email</span>
-            <input
-              aria-label="Email"
-              type="email"
-              placeholder="name@example.com"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-            />
-          </label>
-          <label className="field">
-            <span>Password</span>
-            <input
-              aria-label="Password"
-              type="password"
-              placeholder="Password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-            />
-          </label>
-          <button onClick={() => void handleSignIn()} disabled={authLoading}>
-            {authLoading ? "Signing in…" : "Sign in"}
-          </button>
-          {error ? <p className="error-banner">{error}</p> : null}
+      <main className="zeta-shell" data-testid="zeta-shell">
+        <section className="zeta-phone">
+          <div className="zeta-signin-panel">
+            <p className="zeta-eyebrow">ToDobile</p>
+            <h2>Sign in</h2>
+            <p className="zeta-muted">
+              A condensed queue built for quicker scanning and faster task clearing.
+            </p>
+            <label className="zeta-field">
+              <span>Email</span>
+              <input
+                aria-label="Email"
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+              />
+            </label>
+            <label className="zeta-field">
+              <span>Password</span>
+              <input
+                aria-label="Password"
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+              />
+            </label>
+            <button className="zeta-button zeta-button-primary zeta-full-width" onClick={() => void handleSignIn()} disabled={authLoading}>
+              {authLoading ? "Signing in…" : "Sign in"}
+            </button>
+            {error ? <p className="zeta-error-banner">{error}</p> : null}
+          </div>
         </section>
       </main>
     );
   }
 
   return (
-    <main className="page-shell">
+    <main className="zeta-shell" data-testid="zeta-shell">
       {toastMessage ? (
-        <div className="toast" role="status" aria-live="polite">
+        <div className="zeta-toast" role="status" aria-live="polite">
           {toastMessage}
         </div>
       ) : null}
-      <section className="hero compact">
-        <div>
-          <p className="eyebrow">Household console</p>
-          <h1>{me ? `${me.user.displayName}'s task board` : "Task board"}</h1>
-        </div>
-        <button
-          className="ghost"
-          onClick={() => {
-            setError(null);
-            setMe(null);
 
-            void signOut()
-              .then(() => {
-                setToken("");
-              })
-              .catch((nextError) => {
-                setError(nextError instanceof Error ? nextError.message : "Failed to sign out");
-              });
-          }}
-        >
-          Sign out
-        </button>
-      </section>
+      <section className="zeta-phone">
+        <header className="zeta-top">
+          <div>
+            <h1>
+              {new Intl.DateTimeFormat("en-US", {
+                weekday: "long",
+                month: "long",
+                day: "numeric"
+              }).format(new Date())}
+            </h1>
+          </div>
+          <button
+            className="zeta-button zeta-button-ghost zeta-small-button"
+            onClick={() => {
+              setError(null);
+              setMe(null);
+              void signOut()
+                .then(() => setToken(""))
+                .catch((nextError) => {
+                  setError(nextError instanceof Error ? nextError.message : "Failed to sign out");
+                });
+            }}
+          >
+            Out
+          </button>
+        </header>
 
-      <section className="toolbar">
-        <div className="button-row">
-          {(["backlog", "archived"] as const).map((item) => (
-            <button
-              key={item}
-              className={view === item ? "active" : "ghost"}
-              onClick={() => setView(item)}
-            >
-              {item}
-            </button>
-          ))}
-        </div>
-        <label className="toggle">
-          <input
-            type="checkbox"
-            checked={includePartner}
-            onChange={(event) => setIncludePartner(event.target.checked)}
-          />
-          <span>Include partner tasks</span>
-        </label>
-        <input
-          className="search"
-          placeholder="Search task details"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-        />
-      </section>
-
-      {error ? <p className="error-banner">{error}</p> : null}
-      {loading ? <p className="muted">Loading household context…</p> : null}
-
-      <section className="section-lede">
-        <p className="eyebrow">Everyone's To Do</p>
-        <h2>Shared household view</h2>
-      </section>
-
-      <section className="task-columns">
-        {Object.entries(grouped).map(([assignee, assigneeTasks]) => (
-          <article key={assignee} className="task-column">
-            <div className="panel-header">
-              <h2>{assignee}</h2>
-              <span>{assigneeTasks.length} tasks</span>
+        <section className="zeta-sheet">
+          <div className="zeta-summary-bar" aria-label="Task summary">
+            <div className="zeta-summary-pill">
+              <strong>{summary.open}</strong>
+              <span className="zeta-muted">open</span>
             </div>
-            <div className="task-list">
-              {assigneeTasks.map((task) => (
-                <div key={task.id} className="task-card">
-                  <div className="task-meta">
-                    <span className={`pill category-${task.category}`}>{task.category}</span>
-                    <span>{prettyStatus(task)}</span>
+            <div className="zeta-summary-pill">
+              <strong>{summary.scheduled}</strong>
+              <span className="zeta-muted">scheduled</span>
+            </div>
+            <div className="zeta-summary-pill">
+              <strong>{summary.soon}</strong>
+              <span className="zeta-muted">soon</span>
+            </div>
+            <div className="zeta-summary-pill">
+              <strong>{summary.late}</strong>
+              <span className="zeta-muted">late</span>
+            </div>
+          </div>
+
+          <div className="zeta-filters">
+            {(["Someone", "Zac", "Lauryl"] as AssigneeValue[]).map((assignee) => (
+              <button
+                key={assignee}
+                type="button"
+                className={`zeta-filter zeta-filter-${assignee.toLowerCase()} ${
+                  selectedAssignees.has(assignee) ? "is-active" : ""
+                }`}
+                aria-pressed={selectedAssignees.has(assignee)}
+                onClick={() => toggleAssignee(assignee)}
+              >
+                {ownerButtonLabel(assignee)}
+              </button>
+            ))}
+              <button
+                type="button"
+                className="zeta-button zeta-button-primary zeta-small-button"
+                onClick={() => setComposerOpen(true)}
+              >
+              Add
+            </button>
+          </div>
+
+          <label className="zeta-search-field">
+            <span className="sr-only">Search tasks</span>
+            <input
+              aria-label="Search tasks"
+              placeholder="Search task details"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+          </label>
+        </section>
+
+        {error ? <p className="zeta-error-banner">{error}</p> : null}
+        {loading ? <p className="zeta-inline-state">Loading household context…</p> : null}
+
+        <section className="zeta-list" aria-live="polite" data-testid="zeta-list">
+          {visibleTasks.length === 0 && !loading ? (
+            <p className="zeta-inline-state">No tasks in this slice right now.</p>
+          ) : null}
+
+          {visibleTasks.map((task) => {
+            const urgency = getUrgencyState(task, today);
+            return (
+              <div
+                key={task.id}
+                className={`zeta-row owner-${task.assignee.toLowerCase()} urgency-${urgency} ${
+                  draggingTaskId === task.id ? "is-dragging" : ""
+                } ${dragOverTaskId === task.id ? "is-drag-target" : ""}`}
+                draggable
+                onDragStart={(event) => {
+                  setDraggingTaskId(task.id);
+                  setDragOverTaskId(task.id);
+                  event.dataTransfer.setData("text/plain", task.id);
+                  event.dataTransfer.effectAllowed = "move";
+                }}
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  if (!draggingTaskId || draggingTaskId === task.id) {
+                    return;
+                  }
+                  setDragOverTaskId(task.id);
+                  setOrderedTaskIds((current) =>
+                    reorderTaskIds(
+                      current.length > 0 ? current : visibleTasks.map((item) => item.id),
+                      draggingTaskId,
+                      task.id
+                    )
+                  );
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  const sourceId = event.dataTransfer.getData("text/plain");
+                  setOrderedTaskIds((current) =>
+                    reorderTaskIds(
+                      current.length > 0 ? current : visibleTasks.map((item) => item.id),
+                      sourceId,
+                      task.id
+                    )
+                  );
+                  setDragOverTaskId(null);
+                  setDraggingTaskId(null);
+                }}
+                onDragEnd={() => {
+                  setDragOverTaskId(null);
+                  setDraggingTaskId(null);
+                }}
+              >
+                <button
+                  type="button"
+                  className="zeta-grabber"
+                  aria-label={`Reorder ${task.details}`}
+                >
+                  <span />
+                  <span />
+                </button>
+                <input
+                  className="zeta-row-check"
+                  type="checkbox"
+                  aria-label={`Complete ${task.details}`}
+                  checked={task.status === "completed"}
+                  onChange={() => void handleStatus(task.id, task.status === "completed" ? "active" : "completed")}
+                />
+                <div className="zeta-row-main">
+                  <div className="zeta-row-title">
+                    <span className={`zeta-pill zeta-category-${task.category}`}>
+                      {categoryLabel(task.category)}
+                    </span>
+                    <strong>{task.details}</strong>
                   </div>
-                  <h3>{task.details}</h3>
-                  {task.urls.length > 0 ? (
+                  <p>{prettyRowMeta(task, today)}</p>
+                  {task.urls[0] ? (
                     <a href={task.urls[0]} target="_blank" rel="noreferrer">
                       {task.urls[0]}
                     </a>
                   ) : null}
-                  <div className="button-row">
-                    <button onClick={() => handleStatus(task.id, "completed")}>Complete</button>
-                    <button className="ghost" onClick={() => handleStatus(task.id, "active")}>
-                      Reopen
-                    </button>
-                    <button className="ghost" onClick={() => handleStatus(task.id, "deleted")}>
-                      Delete
-                    </button>
-                  </div>
                 </div>
-              ))}
-              {assigneeTasks.length === 0 ? <p className="muted">No tasks in this slice.</p> : null}
-            </div>
-          </article>
-        ))}
-      </section>
-
-      <section className="panel-grid composer-grid">
-        <section className="panel">
-          <div className="panel-header">
-            <h2>Capture</h2>
-            <span>Text-to-task</span>
-          </div>
-          <textarea
-            rows={4}
-            placeholder="renew tabs by 2026-04-20"
-            value={captureInput}
-            onChange={(event) => setCaptureInput(event.target.value)}
-          />
-          <div className="button-row">
-            <button disabled={!captureInput.trim()} onClick={handleCapture}>
-              Create from text
-            </button>
-            <button
-              type="button"
-              className={recording ? "active mic-button" : "ghost mic-button"}
-              disabled={!recordingSupported}
-              onMouseDown={handleVoiceCaptureStart}
-              onMouseUp={handleVoiceCaptureStop}
-              onMouseLeave={() => {
-                if (recording) {
-                  handleVoiceCaptureStop();
-                }
-              }}
-              onTouchStart={(event) => {
-                event.preventDefault();
-                void handleVoiceCaptureStart();
-              }}
-              onTouchEnd={(event) => {
-                event.preventDefault();
-                handleVoiceCaptureStop();
-              }}
-            >
-              <span aria-hidden="true">🎙</span>
-              <span>{recordingStatus}</span>
-            </button>
-          </div>
-          {!recordingSupported ? (
-            <p className="muted">This browser does not support microphone capture.</p>
-          ) : null}
-          {captureDebug ? (
-            <details className="debug-panel">
-              <summary>OpenAI Debug</summary>
-              <div className="debug-grid">
-                <div>
-                  <h3>Prompt</h3>
-                  <pre>{captureDebug.prompt}</pre>
-                </div>
-                <div>
-                  <h3>Provider</h3>
-                  <pre>{captureDebug.debug.provider}</pre>
-                </div>
-                <div>
-                  <h3>Request Sent</h3>
-                  <pre>{JSON.stringify(captureDebug.debug.request, null, 2)}</pre>
-                </div>
-                <div>
-                  <h3>Raw Response</h3>
-                  <pre>{JSON.stringify(captureDebug.debug.rawResponse, null, 2)}</pre>
+                <div className="zeta-row-actions">
+                  <button
+                    type="button"
+                    className="zeta-icon-button"
+                    aria-label="Task options"
+                    onClick={() => setMenuTaskId((current) => (current === task.id ? null : task.id))}
+                  >
+                    &#8942;
+                  </button>
+                  {menuTaskId === task.id ? (
+                    <div className="zeta-menu">
+                      {task.status !== "completed" ? (
+                        <button type="button" onClick={() => void handleStatus(task.id, "completed")}>
+                          Complete
+                        </button>
+                      ) : (
+                        <button type="button" onClick={() => void handleStatus(task.id, "active")}>
+                          Reopen
+                        </button>
+                      )}
+                      <button type="button" onClick={() => void handleStatus(task.id, "deleted")}>
+                        Delete
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
               </div>
-            </details>
-          ) : null}
+            );
+          })}
         </section>
 
-        <section className="panel">
-          <div className="panel-header">
-            <h2>Manual task</h2>
-            <span>For web management flows</span>
-          </div>
-          <label className="field">
-            <span>Details</span>
-            <input
-              value={newTask.details}
-              onChange={(event) => setNewTask({ ...newTask, details: event.target.value })}
-            />
-          </label>
-          <div className="split">
-            <label className="field">
-              <span>Category</span>
-              <select
-                value={newTask.category}
-                onChange={(event) =>
-                  setNewTask({
-                    ...newTask,
-                    category: event.target.value as CreateTaskInput["category"]
-                  })
-                }
-              >
-                <option value="buy">Buy</option>
-                <option value="do">Do</option>
-                <option value="remember">Remember</option>
-                <option value="blocker">Blocker</option>
-              </select>
-            </label>
-            <label className="field">
-              <span>Assignee</span>
-              <select
-                value={newTask.assignee}
-                onChange={(event) =>
-                  setNewTask({
-                    ...newTask,
-                    assignee: event.target.value as CreateTaskInput["assignee"]
-                  })
-                }
-              >
-                <option value="Zac">Zac</option>
-                <option value="Lauryl">Lauryl</option>
-                <option value="Someone">Someone</option>
-              </select>
-            </label>
-          </div>
-          <div className="split">
-            <label className="field">
-              <span>Deadline</span>
-              <input
-                type="date"
-                value={newTask.deadlineDate ?? ""}
-                onChange={(event) =>
-                  setNewTask({
-                    ...newTask,
-                    deadlineDate: event.target.value || null
-                  })
-                }
-              />
-            </label>
-            <label className="field">
-              <span>Scheduled</span>
-              <input
-                type="date"
-                value={newTask.scheduledDate ?? ""}
-                onChange={(event) =>
-                  setNewTask({
-                    ...newTask,
-                    scheduledDate: event.target.value || null
-                  })
-                }
-              />
-            </label>
-          </div>
-          <button disabled={!newTask.details.trim()} onClick={handleCreateTask}>
-            Save task
-          </button>
-        </section>
+        <nav className="zeta-bottom-nav" data-testid="zeta-bottom-nav">
+          {([
+            ["open", "Open"],
+            ["scheduled", "Scheduled"],
+            ["closed", "Closed"]
+          ] as const).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              className={activeTab === value ? "is-active" : ""}
+              onClick={() => setActiveTab(value)}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
       </section>
+
+      {composerOpen ? (
+        <div className="zeta-overlay" role="presentation" onClick={() => setComposerOpen(false)}>
+          <section
+            className="zeta-composer"
+            role="dialog"
+            aria-modal="true"
+            aria-label="New task"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="zeta-top">
+              <div>
+                <p className="zeta-eyebrow">New task</p>
+                <h2>Capture</h2>
+              </div>
+              <button
+                type="button"
+                className="zeta-button zeta-button-ghost zeta-small-button"
+                onClick={() => setComposerOpen(false)}
+              >
+                Close
+              </button>
+            </header>
+
+            <label className="zeta-field">
+              <span>Capture input</span>
+              <textarea
+                aria-label="Capture input"
+                rows={4}
+                value={captureInput}
+                onChange={(event) => setCaptureInput(event.target.value)}
+                placeholder="Pick up Zac's medicine next Tuesday"
+              />
+            </label>
+
+            <div className="zeta-composer-actions">
+              <button
+                type="button"
+                className="zeta-button zeta-button-primary zeta-small-button"
+                disabled={!captureInput.trim()}
+                onClick={() => void handleCapture()}
+              >
+                From text
+              </button>
+              <button
+                type="button"
+                className={`zeta-button ${recording ? "zeta-button-primary" : "zeta-button-ghost"} zeta-small-button`}
+                disabled={!recordingSupported}
+                onMouseDown={handleVoiceCaptureStart}
+                onMouseUp={handleVoiceCaptureStop}
+                onMouseLeave={() => {
+                  if (recording) handleVoiceCaptureStop();
+                }}
+                onTouchStart={(event) => {
+                  event.preventDefault();
+                  void handleVoiceCaptureStart();
+                }}
+                onTouchEnd={(event) => {
+                  event.preventDefault();
+                  handleVoiceCaptureStop();
+                }}
+              >
+                Voice
+              </button>
+            </div>
+
+            {!recordingSupported ? (
+              <p className="zeta-inline-state">This browser does not support microphone capture.</p>
+            ) : (
+              <p className="zeta-inline-state">{recordingStatus}</p>
+            )}
+
+            <label className="zeta-field">
+              <span>Details</span>
+              <input
+                aria-label="Details"
+                value={newTask.details}
+                onChange={(event) => setNewTask({ ...newTask, details: event.target.value })}
+              />
+            </label>
+
+            <div className="zeta-split">
+              <label className="zeta-field">
+                <span>Category</span>
+                <select
+                  value={newTask.category}
+                  onChange={(event) =>
+                    setNewTask({
+                      ...newTask,
+                      category: event.target.value as CreateTaskInput["category"]
+                    })
+                  }
+                >
+                  <option value="buy">Buy</option>
+                  <option value="do">Do</option>
+                  <option value="blocker">Blocker</option>
+                </select>
+              </label>
+              <label className="zeta-field">
+                <span>Assignee</span>
+                <select
+                  value={newTask.assignee}
+                  onChange={(event) =>
+                    setNewTask({
+                      ...newTask,
+                      assignee: event.target.value as CreateTaskInput["assignee"]
+                    })
+                  }
+                >
+                  <option value="Zac">Zac</option>
+                  <option value="Lauryl">Lauryl</option>
+                  <option value="Someone">Someone</option>
+                </select>
+              </label>
+            </div>
+
+            <div className="zeta-split">
+              <label className="zeta-field">
+                <span>Scheduled</span>
+                <input
+                  type="date"
+                  value={newTask.scheduledDate ?? ""}
+                  onChange={(event) =>
+                    setNewTask({
+                      ...newTask,
+                      scheduledDate: event.target.value || null
+                    })
+                  }
+                />
+              </label>
+              <label className="zeta-field">
+                <span>Deadline</span>
+                <input
+                  type="date"
+                  value={newTask.deadlineDate ?? ""}
+                  onChange={(event) =>
+                    setNewTask({
+                      ...newTask,
+                      deadlineDate: event.target.value || null
+                    })
+                  }
+                />
+              </label>
+            </div>
+
+            <button
+              type="button"
+              className="zeta-button zeta-button-primary zeta-full-width"
+              disabled={!newTask.details.trim()}
+              onClick={() => void handleCreateTask()}
+            >
+              Add task
+            </button>
+
+            {captureDebug ? (
+              <details className="zeta-debug-panel">
+                <summary>OpenAI Debug</summary>
+                <div className="zeta-debug-grid">
+                  <div>
+                    <h3>Prompt</h3>
+                    <pre>{captureDebug.prompt}</pre>
+                  </div>
+                  <div>
+                    <h3>Provider</h3>
+                    <pre>{captureDebug.debug.provider}</pre>
+                  </div>
+                  <div>
+                    <h3>Request Sent</h3>
+                    <pre>{JSON.stringify(captureDebug.debug.request, null, 2)}</pre>
+                  </div>
+                  <div>
+                    <h3>Raw Response</h3>
+                    <pre>{JSON.stringify(captureDebug.debug.rawResponse, null, 2)}</pre>
+                  </div>
+                </div>
+              </details>
+            ) : null}
+          </section>
+        </div>
+      ) : null}
     </main>
   );
 }

@@ -35,4 +35,9 @@ describe("database migration contract", () => {
     expect(sql).toContain("realtime.broadcast_changes(");
     expect(sql).toContain("on realtime.messages");
   });
+
+  it("uses the reduced task category set without remember", () => {
+    expect(sql).toContain("enum ('buy', 'do', 'blocker')");
+    expect(sql).not.toContain("enum ('buy', 'do', 'remember', 'blocker')");
+  });
 });
