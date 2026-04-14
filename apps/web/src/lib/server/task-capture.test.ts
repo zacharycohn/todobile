@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AppError } from "./errors";
-import type { RuntimeDependencies } from "./types";
 
 type TestConfig = {
   nextPublicSupabaseUrl: string | undefined;
@@ -21,15 +20,6 @@ const baseConfig: TestConfig = {
   nextPublicApiBaseUrl: "http://localhost:3000"
 };
 
-const auth = {
-  userId: "4f8c55d4-6f4c-4db3-a0a7-4f0e8b86c1c4",
-  email: "zac@example.com",
-  familyId: "8f7c91f2-6e6c-4e63-81ef-0f5810a03e1e",
-  displayName: "Zac",
-  assigneeKey: "Zac" as const,
-  bearerToken: "jwt-token"
-};
-
 async function importTaskCapture(configOverrides: Partial<TestConfig> = {}) {
   vi.resetModules();
   vi.doMock("./config", () => ({
@@ -40,38 +30,6 @@ async function importTaskCapture(configOverrides: Partial<TestConfig> = {}) {
   }));
 
   return import("./task-capture");
-}
-
-function createDependencies(): RuntimeDependencies {
-  return {
-    profiles: {
-      getByUserId: vi.fn()
-    },
-    tasks: {
-      listTasks: vi.fn(),
-      createTask: vi.fn(async (_auth, input) => ({
-        id: "task-1",
-        familyId: auth.familyId,
-        details: input.details,
-        category: input.category,
-        assignee: input.assignee,
-        status: "active" as const,
-        deadlineDate: input.deadlineDate ?? null,
-        scheduledDate: input.scheduledDate ?? null,
-        urls: input.urls ?? [],
-        createdAt: "2026-04-11T17:00:00.000Z",
-        createdByUserId: auth.userId,
-        updatedAt: "2026-04-11T17:00:00.000Z",
-        completedAt: null,
-        deletedAt: null
-      })),
-      updateTask: vi.fn()
-    },
-    ai: {
-      parseText: vi.fn(),
-      parseVoice: vi.fn()
-    }
-  };
 }
 
 describe("task capture", () => {
