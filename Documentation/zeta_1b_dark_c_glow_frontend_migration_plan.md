@@ -94,18 +94,11 @@ The current frontend in [task-dashboard-app.tsx](/Users/zacharycohn/Documents/To
   - a toast and inline error/loading states
   - OpenAI debug inside the capture panel
 
-The current stylesheet in [globals.css](/Users/zacharycohn/Documents/ToDobile/apps/web/src/app/globals.css) is a light editorial design system and does not map naturally onto the selected prototype.
+The current stylesheet in [globals.css](/Users/zacharycohn/Documents/ToDobile/apps/web/src/app/globals.css) is a light editorial design system and does not map naturally onto the selected interface direction.
 
 ## Target Frontend Summary
 
-The selected prototype in:
-
-- [index.html](/Users/zacharycohn/Documents/ToDobile/prototypes/zeta-1b-dark-c-glow/index.html)
-- [signed-out.html](/Users/zacharycohn/Documents/ToDobile/prototypes/zeta-1b-dark-c-glow/signed-out.html)
-- [task-creation.html](/Users/zacharycohn/Documents/ToDobile/prototypes/zeta-1b-dark-c-glow/task-creation.html)
-- [styles.css](/Users/zacharycohn/Documents/ToDobile/prototypes/zeta-1b-dark-c-glow/styles.css)
-
-introduces:
+The selected interface direction introduces:
 
 - narrow centered single-column shell
 - dark glossy surface system
@@ -150,7 +143,7 @@ introduces:
 
 ### Styling changes
 
-- Replace the light palette and serif-led page design with the dark prototype system.
+- Replace the light palette and serif-led page design with the dark target system.
 - Rebuild spacing, shape, borders, shadows, and typography to match the target.
 - Add glow styling carefully so urgency is visible without becoming noisy.
 

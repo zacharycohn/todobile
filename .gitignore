@@ -13,6 +13,17 @@ test-results
 apps/android/.gradle
 apps/android/build
 apps/android/app/build
+apps/android/.idea/.name
+apps/android/.idea/codeStyles/
+apps/android/.idea/gradle.xml
+apps/android/.idea/misc.xml
+apps/android/.idea/compiler.xml
+apps/android/.idea/deploymentTargetSelector.xml
+apps/android/.idea/inspectionProfiles/
+apps/android/.idea/vcs.xml
+apps/android/.idea/workspace.xml
+apps/obs-studio-*.dmg
+*.dmg
 *.tsbuildinfo
 *.iml
 local.properties
